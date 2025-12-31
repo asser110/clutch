@@ -2,10 +2,28 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import TypingAnimation from './components/TypingAnimation';
 import LoginComponent from './components/Login';
+import SignUpComponent from './components/SignUp';
 
 const App: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState('landing');
+  const { pathname, search } = window.location;
 
+  // Simple router
+  if (pathname.startsWith('/signup')) {
+    const params = new URLSearchParams(search);
+    const token = params.get('token');
+    const expires = params.get('expires');
+    
+    const handleNavigateHome = () => {
+      window.history.pushState({}, '', '/');
+      // A full reload might be easier to reset state in this simple app
+      window.location.pathname = '/';
+    };
+
+    return <SignUpComponent token={token} expires={expires} onNavigateHome={handleNavigateHome} />;
+  }
+
+  // --- Landing/Login Page Logic ---
+  const [currentPage, setCurrentPage] = useState('landing');
   const [brandingAnimationComplete, setBrandingAnimationComplete] = useState(false);
   const [welcomeAnimationComplete, setWelcomeAnimationComplete] = useState(false);
   const [showButton, setShowButton] = useState(false);
