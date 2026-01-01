@@ -19,7 +19,15 @@ const App: React.FC = () => {
       window.location.pathname = '/';
     };
 
-    return <SignUpComponent token={token} expires={expires} onNavigateHome={handleNavigateHome} />;
+    return <SignUpComponent 
+      token={token} 
+      expires={expires} 
+      onNavigateHome={handleNavigateHome} 
+      onSignUpSuccess={() => {
+        // A full reload to reset state and navigate
+        window.location.pathname = '/';
+      }} 
+    />;
   }
 
   // --- Landing/Login Page Logic ---
