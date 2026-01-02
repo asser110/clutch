@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { EyeIcon, EyeOffIcon } from './icons';
 import { supabase } from '../lib/supabaseClient';
@@ -84,12 +83,8 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
     if (error) {
       setErrors({ form: error.message });
     } else if (data.user) {
-      // Check if user needs confirmation
-      if (data.user.identities && data.user.identities.length === 0) {
-         setErrors({ form: 'This user already exists. Please try logging in.' });
-      } else {
-        setIsSignedUp(true);
-      }
+      // With email confirmation disabled, a successful sign up means the user is created.
+      setIsSignedUp(true);
     }
     setLoading(false);
   };
@@ -119,7 +114,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
     return (
       <div className="bg-black text-white h-screen w-screen flex flex-col items-center justify-center text-center p-4">
         <h1 className="text-4xl mb-6">ACCOUNT CREATED!</h1>
-        <p className="text-gray-400 mb-8 max-w-sm">Please check your email at <span className="text-white">{email}</span> and click the confirmation link to activate your account.</p>
+        <p className="text-gray-400 mb-8 max-w-sm">Your account has been successfully created. You can now log in.</p>
         <button 
           onClick={onSignUpSuccess}
           className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white">

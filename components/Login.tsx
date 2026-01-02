@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { EyeIcon, EyeOffIcon } from './icons';
 import { supabase } from '../lib/supabaseClient';
@@ -34,13 +33,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
       setError(error.message);
     } else {
       setSuccess(true);
-      // In a real app, you would redirect to the main app interface.
-      // Here, we'll just show a success message and go back.
-      setTimeout(() => {
-        // This would be a redirect in a real app
-        alert("Login successful! You would now be taken to the app.");
-        onBack();
-      }, 1500);
+      // The onAuthStateChange listener in App.tsx will now handle the redirect.
     }
     setLoading(false);
   };

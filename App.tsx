@@ -1,13 +1,46 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import TypingAnimation from './components/TypingAnimation';
 import LoginComponent from './components/Login';
 import SignUpComponent from './components/SignUp';
+import Dashboard from './components/Dashboard';
+import { supabase } from './lib/supabaseClient';
+import { Session } from '@supabase/supabase-js';
 
 const App: React.FC = () => {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      setLoading(false);
+    };
+    getSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    return <div className="bg-black h-screen w-screen"></div>; // Or a proper loading spinner
+  }
+
+  if (!session) {
+    return <Landing />;
+  }
+  
+  return <Dashboard session={session} />;
+};
+
+// Extracted the original App component logic into a Landing component
+const Landing: React.FC = () => {
   const { pathname, search } = window.location;
 
-  // Simple router
+  // Simple router for signup page
   if (pathname.startsWith('/signup')) {
     const params = new URLSearchParams(search);
     const token = params.get('token');
@@ -15,7 +48,6 @@ const App: React.FC = () => {
     
     const handleNavigateHome = () => {
       window.history.pushState({}, '', '/');
-      // A full reload might be easier to reset state in this simple app
       window.location.pathname = '/';
     };
 
@@ -24,7 +56,6 @@ const App: React.FC = () => {
       expires={expires} 
       onNavigateHome={handleNavigateHome} 
       onSignUpSuccess={() => {
-        // A full reload to reset state and navigate
         window.location.pathname = '/';
       }} 
     />;
@@ -65,7 +96,7 @@ const App: React.FC = () => {
         setBrandingAnimationComplete(false);
         setWelcomeAnimationComplete(false);
         setShowButton(false);
-      }, 300); // Short delay to allow for smooth transitions
+      }, 300); // Short delay for smooth transitions
       return () => clearTimeout(timer);
     }
   }, [currentPage]);
@@ -184,5 +215,6 @@ const App: React.FC = () => {
     </div>
   );
 };
+
 
 export default App;
