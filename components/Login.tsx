@@ -32,6 +32,9 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
     if (error) {
       setError(error.message);
     } else {
+      // Set a flag in session storage to indicate a new login event.
+      // The Dashboard component will use this to show a one-time notification.
+      sessionStorage.setItem('clutch-new-login', 'true');
       setSuccess(true);
       // The onAuthStateChange listener in App.tsx will now handle the redirect.
     }
