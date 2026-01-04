@@ -125,3 +125,6 @@ web-build/
 
 # Vite build output
 dist
+
+# Supabase
+.supabase

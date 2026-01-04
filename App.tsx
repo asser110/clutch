@@ -127,7 +127,7 @@ const Landing: React.FC = () => {
   }
 
   return (
-    <div className="bg-black text-white min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative">
+    <div className="font-press-start bg-black text-white min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative">
       <div className="absolute top-6 left-6 md:top-8 md:left-8">
         {!brandingAnimationComplete ? (
           <TypingAnimation
