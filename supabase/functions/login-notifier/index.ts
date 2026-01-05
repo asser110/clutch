@@ -1,79 +1,203 @@
 // File: supabase/functions/login-notifier/index.ts
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { Resend } from 'https://esm.sh/resend@3.2.0';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Fix for TypeScript error: "Cannot find name 'Deno'".
-// Supabase Edge Functions run in a Deno environment, which has a global 'Deno' object.
-// This declaration provides type information for the TypeScript checker.
-declare const Deno: {
-  env: {
-    get: (key: string) => string | undefined;
-  };
-};
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
+const FROM_EMAIL = 'onboarding@resend.dev'; // Change this to your verified domain email
 
-// This securely gets the API key you'll add as a secret in your Supabase project dashboard.
-const resend = new Resend(Deno.env.get('RESEND_API_KEY')!);
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
-// For testing, Resend allows you to send from this address.
-// For a real application, you would verify your own domain in your Resend account.
-const FROM_EMAIL = 'onboarding@resend.dev';
-
-serve(async (req) => {
-  if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+serve(async (req: Request) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { type, record, old_record } = await req.json();
+    const { email, timestamp } = await req.json();
 
-    // The webhook should be configured for UPDATE events on auth.users.
-    // We'll add this check for robustness.
-    if (type !== 'UPDATE') {
-      console.warn(`Received non-UPDATE event type: ${type}. Ignoring.`);
-      return new Response('Unsupported event type', { status: 400 });
+    if (!email) {
+      return new Response(
+        JSON.stringify({ error: 'Email is required' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
-    // A login updates the `last_sign_in_at` field. We check if it has changed
-    // to ensure we only send an email on login, not other user updates.
-    if (record.last_sign_in_at === old_record.last_sign_in_at) {
-      console.log('No new login detected (last_sign_in_at unchanged). Skipping email notification.');
-      return new Response('No new login detected', { status: 200 });
-    }
+    console.log(`Sending login notification to: ${email}`);
 
-    const userEmail = record.email;
-
-    if (!userEmail) {
-      console.warn("Webhook payload did not contain a user email.");
-      return new Response('No email provided in payload', { status: 400 });
-    }
-
-    console.log(`New login detected. Sending notification to: ${userEmail}`);
-
-    // Send email using Gmail SMTP
-    await client.send({
-      from: `${GMAIL_USER}`,
-      to: userEmail,
-      subject: 'Security Alert: New Login to Your Clutch Account',
-      html: `
-        <div style="font-family: sans-serif; line-height: 1.6; padding: 20px; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd;">
-          <h2 style="color: #000;">Security Alert: New Sign-In</h2>
-          <p>Someone has logged into your Clutch account. <b>If this was not you, please change your password immediately.</b></p>
-          <p>If you authorized this login, you can safely disregard this email.</p>
-          <br/>
-          <p>Thanks,</p>
-          <p>The Clutch Security Team</p>
-        </div>
-      `,
+    // Send email using Resend API
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: [email],
+        subject: '🔒 Security Alert: New Login to Your Clutch Account',
+        html: `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                body { 
+                  font-family: 'Press Start 2P', 'Courier New', monospace; 
+                  background-color: #000; 
+                  color: #fff; 
+                  margin: 0; 
+                  padding: 20px;
+                }
+                .container { 
+                  max-width: 600px; 
+                  margin: 0 auto; 
+                  background-color: #1a1a1a; 
+                  border: 3px solid #fff; 
+                  padding: 30px;
+                  box-shadow: 8px 8px 0px #999;
+                }
+                .header { 
+                  text-align: center; 
+                  font-size: 24px; 
+                  margin-bottom: 30px; 
+                  color: #fff;
+                  text-transform: uppercase;
+                }
+                .alert-box { 
+                  background-color: #ff0000; 
+                  color: #fff; 
+                  padding: 20px; 
+                  margin: 20px 0;
+                  border: 2px solid #fff;
+                  text-align: center;
+                  font-size: 14px;
+                }
+                .content { 
+                  line-height: 2; 
+                  font-size: 12px; 
+                  color: #ccc;
+                }
+                .timestamp { 
+                  background-color: #2a2a2a; 
+                  padding: 15px; 
+                  margin: 20px 0;
+                  border-left: 4px solid #fff;
+                  font-size: 10px;
+                  color: #0f0;
+                }
+                .button { 
+                  display: inline-block; 
+                  background-color: #fff; 
+                  color: #000; 
+                  padding: 15px 30px; 
+                  text-decoration: none; 
+                  margin: 20px 0;
+                  border: none;
+                  box-shadow: 4px 4px 0px #999;
+                  font-size: 12px;
+                  text-transform: uppercase;
+                  font-weight: bold;
+                }
+                .footer { 
+                  margin-top: 30px; 
+                  padding-top: 20px; 
+                  border-top: 2px solid #333; 
+                  font-size: 10px; 
+                  color: #666;
+                  text-align: center;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">🔒 CLUTCH SECURITY 🔒</div>
+                
+                <div class="alert-box">
+                  ⚠️ NEW LOGIN DETECTED ⚠️
+                </div>
+                
+                <div class="content">
+                  <p>Hello,</p>
+                  
+                  <p>We detected a new login to your Clutch account.</p>
+                  
+                  <div class="timestamp">
+                    <strong>LOGIN TIME:</strong><br/>
+                    ${new Date(timestamp || Date.now()).toLocaleString('en-US', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric', 
+                      hour: '2-digit', 
+                      minute: '2-digit',
+                      timeZoneName: 'short'
+                    })}
+                  </div>
+                  
+                  <p><strong>If this was you:</strong></p>
+                  <p>You can safely ignore this email. Your account is secure.</p>
+                  
+                  <p><strong style="color: #ff0000;">If this wasn't you:</strong></p>
+                  <p>Your account may have been compromised. Please change your password immediately and review your account activity.</p>
+                  
+                  <div style="text-align: center;">
+                    <a href="https://xwdkjwitfafpwniffbeg.supabase.co" class="button" style="color: #000;">
+                      SECURE MY ACCOUNT
+                    </a>
+                  </div>
+                </div>
+                
+                <div class="footer">
+                  <p>This is an automated security notification from Clutch.</p>
+                  <p>If you have any questions, please contact our security team.</p>
+                  <p>© ${new Date().getFullYear()} Clutch. All rights reserved.</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `,
+      }),
     });
 
-    await client.close();
+    const resendData = await resendResponse.json();
 
-    console.log("Email sent successfully!");
-    return new Response('Email sent successfully!', { status: 200 });
+    if (!resendResponse.ok) {
+      console.error('Resend API error:', resendData);
+      return new Response(
+        JSON.stringify({ error: 'Failed to send email', details: resendData }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    console.log('Email sent successfully!', resendData);
+    return new Response(
+      JSON.stringify({ success: true, message: 'Email sent successfully', data: resendData }),
+      { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
 
   } catch (err) {
-    console.error(err);
-    return new Response('Internal Server Error', { status: 500 });
+    console.error('Error:', err);
+    return new Response(
+      JSON.stringify({ error: 'Internal Server Error', message: err.message }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
   }
 })
