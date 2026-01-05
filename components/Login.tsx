@@ -42,7 +42,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
   };
   
   return (
-    <div className="bg-black text-white h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
+    <div className="font-press-start bg-black text-white h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
       <style>{`
         @keyframes login-fade-in {
           from { opacity: 0; }
