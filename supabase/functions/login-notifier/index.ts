@@ -50,10 +50,10 @@ serve(async (req) => {
 
     console.log(`New login detected. Sending notification to: ${userEmail}`);
 
-    // Here we use the Resend client to send the actual email.
-    const { data, error } = await resend.emails.send({
-      from: `Clutch Security <${FROM_EMAIL}>`,
-      to: [userEmail],
+    // Send email using Gmail SMTP
+    await client.send({
+      from: `${GMAIL_USER}`,
+      to: userEmail,
       subject: 'Security Alert: New Login to Your Clutch Account',
       html: `
         <div style="font-family: sans-serif; line-height: 1.6; padding: 20px; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd;">
@@ -67,10 +67,7 @@ serve(async (req) => {
       `,
     });
 
-    if (error) {
-      console.error({ error });
-      return new Response(JSON.stringify({ error: error.message }), { status: 500 });
-    }
+    await client.close();
 
     console.log("Email sent successfully!");
     return new Response('Email sent successfully!', { status: 200 });
