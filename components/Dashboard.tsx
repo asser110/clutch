@@ -28,6 +28,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
   return (
     <div className="bg-black text-white min-h-screen w-full flex flex-col relative">
+      {/* 
+        NOTE: The actual email sending for this notification would be handled 
+        by a backend service, such as a Supabase Edge Function, triggered on login.
+        This frontend component simulates that experience for the user.
+      */}
       {showLoginNotification && (
         <>
           <style>{`

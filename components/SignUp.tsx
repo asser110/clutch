@@ -50,9 +50,6 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
     if (!username.trim()) {
       newErrors.username = 'USERNAME IS REQUIRED';
     }
-    if (username.trim().length > 20) {
-      newErrors.username = 'USERNAME MUST BE 20 CHARACTERS OR LESS';
-    }
     if (!password) {
       newErrors.password = 'PASSWORD IS REQUIRED';
     } else if (password.length < 8) {
@@ -61,10 +58,11 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
     if (password !== confirmPassword) {
       newErrors.confirmPassword = 'PASSWORDS DO NOT MATCH';
     }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
+  
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
@@ -73,7 +71,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
     setLoading(true);
     setErrors({});
 
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -82,21 +80,14 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
         },
       },
     });
-    
-    setLoading(false);
 
     if (error) {
       setErrors({ form: error.message });
-    } else if (data.user) {
+    } else {
       setIsSignedUp(true);
-      setTimeout(() => {
-        onSignUpSuccess();
-      }, 3000);
     }
+    setLoading(false);
   };
-  
-  const togglePasswordVisibility = () => setPasswordVisible(p => !p);
-  const toggleConfirmPasswordVisibility = () => setConfirmPasswordVisible(p => !p);
 
   if (isValid === null) {
     return (
@@ -109,17 +100,10 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
   if (!isValid) {
     return (
       <div className="font-press-start bg-black text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center">
-        <h1 className="text-4xl mb-6">{isExpired ? 'LINK EXPIRED' : 'INVALID LINK'}</h1>
-        <p className="text-gray-400 mb-8 max-w-sm">
-          {isExpired
-            ? 'This sign-up link has expired. Please request a new one.'
-            : 'This sign-up link is invalid. Please check the URL and try again.'}
-        </p>
-        <button
-          onClick={onNavigateHome}
-          className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white"
-        >
-          GO HOME
+        <h1 className="text-5xl mb-8">INVALID INVITE</h1>
+        <p className="text-gray-400 mb-8">{isExpired ? 'This invite link has expired.' : 'This invite link is not valid.'}</p>
+        <button onClick={onNavigateHome} className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none">
+          RETURN HOME
         </button>
       </div>
     );
@@ -127,28 +111,32 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
 
   if (isSignedUp) {
     return (
-       <div className="font-press-start bg-black text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center">
-           <style>{`@keyframes login-fade-in { from { opacity: 0; } to { opacity: 1; } } .animate-login-fade-in { animation: login-fade-in 0.4s ease-out forwards; }`}</style>
-           <div className="animate-login-fade-in">
-             <h1 className="text-4xl mb-6">SUCCESS!</h1>
-             <p className="text-gray-400 mb-8 max-w-sm">
-                 Your account has been created. A confirmation email has been sent. Please check your inbox to verify your account. Redirecting to home...
-             </p>
-           </div>
-       </div>
-   );
- }
-
+        <div className="font-press-start bg-black text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center">
+            <h1 className="text-5xl mb-8">SUCCESS!</h1>
+            <p className="text-gray-400 mb-8">Your account has been created. Please check your email to verify your account.</p>
+            <button onClick={onSignUpSuccess} className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none">
+                CONTINUE
+            </button>
+        </div>
+    );
+  }
+  
   return (
-    <div className="font-press-start bg-black text-white h-screen w-screen overflow-y-auto relative flex flex-col items-center justify-center p-4">
-       <style>{`@keyframes login-fade-in { from { opacity: 0; } to { opacity: 1; } } .animate-login-fade-in { animation: login-fade-in 0.4s ease-out forwards; }`}</style>
-      <div className="w-full max-w-sm text-center animate-login-fade-in">
+    <div className="font-press-start bg-black text-white h-screen w-screen overflow-y-auto flex flex-col items-center justify-center p-4">
+      <style>{`
+        @keyframes signup-fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-signup-fade-in { animation: signup-fade-in 0.4s ease-out forwards; }
+      `}</style>
+      <div className="w-full max-w-sm text-center animate-signup-fade-in py-12">
         <header className="absolute top-8 left-8 text-lg">
           <button onClick={onNavigateHome} className="text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
             &lt;&lt; BACK
           </button>
         </header>
-        <h1 className="text-4xl md:text-5xl mb-12">CREATE ACCOUNT</h1>
+        <h1 className="text-5xl mb-12">SIGN UP</h1>
         <form className="flex flex-col gap-6" onSubmit={handleSignUp} noValidate>
           <div>
             <label htmlFor="email" className="block text-left text-sm mb-2">EMAIL</label>
@@ -188,7 +176,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
                 placeholder="CREATE A PASSWORD..."
                 required
               />
-              <button type="button" onClick={togglePasswordVisibility} className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
+              <button type="button" onClick={() => setPasswordVisible(!passwordVisible)} className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
                 {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             </div>
@@ -206,19 +194,19 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
                 placeholder="CONFIRM YOUR PASSWORD..."
                 required
               />
-              <button type="button" onClick={toggleConfirmPasswordVisibility} className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
+              <button type="button" onClick={() => setConfirmPasswordVisible(!confirmPasswordVisible)} className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
                 {confirmPasswordVisible ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             </div>
             {errors.confirmPassword && <p className="text-red-500 text-xs text-left mt-1">{errors.confirmPassword}</p>}
           </div>
-          {errors.form && <p className="text-red-500 text-xs text-left -mb-2">{errors.form}</p>}
+          {errors.form && <p className="text-red-500 text-xs text-left">{errors.form}</p>}
           <button 
             type="submit" 
             disabled={loading}
             className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
           >
-            {loading ? 'CREATING...' : 'CREATE'}
+            {loading ? 'CREATING...' : 'CREATE ACCOUNT'}
           </button>
         </form>
       </div>

@@ -24,38 +24,21 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
     setError(null);
     setSuccess(false);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
       setError(error.message);
-      setLoading(false);
     } else {
-      // Send login notification email
-      try {
-        const { error: functionError } = await supabase.functions.invoke('login-notifier', {
-          body: {
-            email: data.user?.email,
-            timestamp: new Date().toISOString(),
-          }
-        });
-
-        if (functionError) {
-          console.error('Failed to send login notification:', functionError);
-        }
-      } catch (err) {
-        console.error('Error invoking login-notifier function:', err);
-      }
-
       // Set a flag in session storage to indicate a new login event.
       // The Dashboard component will use this to show a one-time notification.
       sessionStorage.setItem('clutch-new-login', 'true');
       setSuccess(true);
-      setLoading(false);
       // The onAuthStateChange listener in App.tsx will now handle the redirect.
     }
+    setLoading(false);
   };
   
   return (
