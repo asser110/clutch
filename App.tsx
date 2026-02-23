@@ -102,16 +102,15 @@ const Landing: React.FC = () => {
   }, [currentPage]);
 
   const generateInviteLink = () => {
-    // Use crypto.randomUUID if available, otherwise fallback to complex Math.random string
-    const token = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-      ? crypto.randomUUID()
-      : Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+    // Guaranteed unique token using timestamp + random string
+    const token = Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
 
     const expires = Date.now() + 15 * 60 * 1000; // 15 minutes from now
     const link = `${window.location.origin}/signup?token=${token}&expires=${expires}`;
     setInviteLink(link);
     setCopied(false);
   };
+
 
   const copyLink = () => {
     if (inviteLink) {
