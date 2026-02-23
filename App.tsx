@@ -198,8 +198,15 @@ const Landing: React.FC = () => {
                 </button>
               ) : (
                 <>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <input type="text" readOnly value={inviteLink} className="w-full p-3 bg-gray-800 border-2 border-gray-600 text-gray-300 focus:outline-none" />
+                    <button
+                      onClick={() => setInviteLink(null)}
+                      className="text-gray-500 hover:text-white transition-colors p-2 text-xl font-bold focus:outline-none"
+                      title="Kill Link"
+                    >
+                      X
+                    </button>
                     <button onClick={copyLink} className="flex-shrink-0 text-sm text-black bg-white px-4 py-2 transition-all duration-150 ease-in-out shadow-[2px_2px_0px_#999] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none active:translate-x-0.5 active:translate-y-0.5 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white">
                       {copied ? 'COPIED!' : 'COPY'}
                     </button>
