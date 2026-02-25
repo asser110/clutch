@@ -12,15 +12,17 @@ const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_SUPABASE_ANON_KEY ||
   import.meta.env.VITE_SUPABASE_VITE_PUBLIC_SUPABASE_ANON_KEY;
 
-// Debug log to help identify configuration issues in production
+// v3.0 Diagnostic Log - Verifying which Vercel variable is actually working
 if (typeof window !== 'undefined') {
-  console.log('Supabase Config Check:', {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-    urlLength: supabaseUrl?.length,
-    origin: window.location.origin
+  console.log('--- Supabase Audit v3.0 ---');
+  console.log('Variables Found:', {
+    VITE_SUPABASE_URL: !!import.meta.env.VITE_SUPABASE_URL,
+    VITE_PUBLIC_SUPABASE_URL: !!import.meta.env.VITE_PUBLIC_SUPABASE_URL,
+    VITE_SUPABASE_SUPABASE_URL: !!import.meta.env.VITE_SUPABASE_SUPABASE_URL,
+    VITE_SUPABASE_VITE_PUBLIC_SUPABASE_URL: !!import.meta.env.VITE_SUPABASE_VITE_PUBLIC_SUPABASE_URL
   });
 }
+
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error("CRITICAL: Supabase credentials missing! Check Vercel environment variables.");
