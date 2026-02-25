@@ -62,7 +62,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-  
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
@@ -82,7 +82,8 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
     });
 
     if (error) {
-      setErrors({ form: error.message });
+      console.error('Signup Failure Deep Audit:', error);
+      setErrors({ form: `ERROR [v4.0]: ${error.message} (Check Console)` });
     } else {
       setIsSignedUp(true);
     }
@@ -111,16 +112,16 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
 
   if (isSignedUp) {
     return (
-        <div className="font-press-start bg-black text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center">
-            <h1 className="text-5xl mb-8">SUCCESS!</h1>
-            <p className="text-gray-400 mb-8">Your account has been created. Please check your email to verify your account.</p>
-            <button onClick={onSignUpSuccess} className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none">
-                CONTINUE
-            </button>
-        </div>
+      <div className="font-press-start bg-black text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center">
+        <h1 className="text-5xl mb-8">SUCCESS!</h1>
+        <p className="text-gray-400 mb-8">Your account has been created. Please check your email to verify your account.</p>
+        <button onClick={onSignUpSuccess} className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none">
+          CONTINUE
+        </button>
+      </div>
     );
   }
-  
+
   return (
     <div className="font-press-start bg-black text-white h-screen w-screen overflow-y-auto flex flex-col items-center justify-center p-4">
       <style>{`
@@ -201,8 +202,8 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
             {errors.confirmPassword && <p className="text-red-500 text-xs text-left mt-1">{errors.confirmPassword}</p>}
           </div>
           {errors.form && <p className="text-red-500 text-xs text-left">{errors.form}</p>}
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
             className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
           >

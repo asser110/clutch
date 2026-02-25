@@ -2,31 +2,44 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL ||
-  import.meta.env.VITE_PUBLIC_SUPABASE_URL ||
   import.meta.env.VITE_SUPABASE_SUPABASE_URL ||
-  import.meta.env.VITE_SUPABASE_VITE_PUBLIC_SUPABASE_URL; // Catch the messy ones
+  import.meta.env.VITE_PUBLIC_SUPABASE_URL ||
+  "";
 
 const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY ||
   import.meta.env.VITE_SUPABASE_SUPABASE_ANON_KEY ||
-  import.meta.env.VITE_SUPABASE_VITE_PUBLIC_SUPABASE_ANON_KEY;
+  import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY ||
+  "";
 
-// v3.0 Diagnostic Log - Verifying which Vercel variable is actually working
-if (typeof window !== 'undefined') {
-  console.log('--- Supabase Audit v3.0 ---');
-  console.log('Variables Found:', {
-    VITE_SUPABASE_URL: !!import.meta.env.VITE_SUPABASE_URL,
-    VITE_PUBLIC_SUPABASE_URL: !!import.meta.env.VITE_PUBLIC_SUPABASE_URL,
-    VITE_SUPABASE_SUPABASE_URL: !!import.meta.env.VITE_SUPABASE_SUPABASE_URL,
-    VITE_SUPABASE_VITE_PUBLIC_SUPABASE_URL: !!import.meta.env.VITE_SUPABASE_VITE_PUBLIC_SUPABASE_URL
-  });
-}
+// v4.0 Deep Diagnostics
+export const testConnection = async () => {
+  try {
+    console.log('--- Supabase Deep Audit v4.0 ---');
+    console.log('URL Configured:', !!supabaseUrl);
+    console.log('Key Configured:', !!supabaseAnonKey);
 
+    if (!supabaseUrl || !supabaseAnonKey) return { success: false, error: 'MISSING_KEYS' };
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("CRITICAL: Supabase credentials missing! Check Vercel environment variables.");
-}
+    const { data, error } = await createClient(supabaseUrl, supabaseAnonKey)
+      .from('profiles')
+      .select('count', { count: 'exact', head: true });
 
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+    if (error) {
+      console.error('Connection Test Error Object:', error);
+      // Specifically checking for 404 or Fetch errors
+      if (error.message?.includes('Failed to fetch')) return { success: false, error: 'NETWORK_ERROR' };
+      return { success: false, error: error.message };
+    }
+
+    console.log('Connection Test Success!');
+    return { success: true };
+  } catch (e: any) {
+    console.error('Connection Test Crash:', e);
+    return { success: false, error: e.message || 'CRASH' };
+  }
+};
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 
