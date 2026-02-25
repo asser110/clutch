@@ -25,20 +25,38 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
 
   useEffect(() => {
-    if (!token || !expires) {
-      setIsValid(false);
-      return;
-    }
+    const validateToken = async () => {
+      if (!token || !expires) {
+        setIsValid(false);
+        return;
+      }
 
-    const expiryTime = parseInt(expires, 10);
-    if (isNaN(expiryTime) || Date.now() > expiryTime) {
-      setIsExpired(true);
-      setIsValid(false);
-      return;
-    }
+      const expiryTime = parseInt(expires, 10);
+      if (isNaN(expiryTime) || Date.now() > expiryTime) {
+        setIsExpired(true);
+        setIsValid(false);
+        return;
+      }
 
-    setIsValid(true);
+      // v6.0 Database check
+      const { data, error } = await supabase
+        .from('invites')
+        .select('is_active')
+        .eq('token', token)
+        .single();
+
+      if (error || !data || !data.is_active) {
+        setIsExpired(true); // Treat killed/missing as expired for user feedback
+        setIsValid(false);
+        return;
+      }
+
+      setIsValid(true);
+    };
+
+    validateToken();
   }, [token, expires]);
+
 
   const validate = () => {
     const newErrors: { [key: string]: string } = {};

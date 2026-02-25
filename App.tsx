@@ -103,11 +103,23 @@ const Landing: React.FC = () => {
 
   const [flashing, setFlashing] = useState(false);
 
-  const generateInviteLink = () => {
+  const generateInviteLink = async () => {
     // Salted unique token
     const token = Math.random().toString(36).substring(2, 10) + Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
 
     const expires = Date.now() + 15 * 60 * 1000; // 15 minutes from now
+
+    // Save to Supabase
+    const { error } = await supabase
+      .from('invites')
+      .insert([{ token, expires_at: expires, is_active: true }]);
+
+    if (error) {
+      console.error('Error saving invite:', error);
+      alert('DATABASE ERROR: Make sure you ran the SQL script in Supabase!');
+      return;
+    }
+
     const link = `${window.location.origin}/signup?token=${token}&expires=${expires}`;
     setInviteLink(link);
     setCopied(false);
@@ -116,6 +128,27 @@ const Landing: React.FC = () => {
     setFlashing(true);
     setTimeout(() => setFlashing(false), 500);
   };
+
+  const killLink = async () => {
+    if (!inviteLink) return;
+
+    const url = new URL(inviteLink);
+    const token = url.searchParams.get('token');
+
+    if (token) {
+      const { error } = await supabase
+        .from('invites')
+        .update({ is_active: false })
+        .eq('token', token);
+
+      if (error) {
+        console.error('Error killing link:', error);
+      }
+    }
+
+    setInviteLink(null);
+  };
+
 
 
 
@@ -246,12 +279,13 @@ const Landing: React.FC = () => {
                       className={`w-full p-3 bg-gray-800 border-2 border-gray-600 text-gray-300 focus:outline-none transition-all duration-300 ${flashing ? 'border-white bg-gray-700' : ''}`}
                     />
                     <button
-                      onClick={() => setInviteLink(null)}
+                      onClick={killLink}
                       className="text-gray-500 hover:text-white transition-colors p-2 text-xl font-bold focus:outline-none"
                       title="Kill Link"
                     >
                       X
                     </button>
+
                     <button onClick={copyLink} className="flex-shrink-0 text-sm text-black bg-white px-4 py-2 transition-all duration-150 ease-in-out shadow-[2px_2px_0px_#999] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none active:translate-x-0.5 active:translate-y-0.5 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white">
                       {copied ? 'COPIED!' : 'COPY'}
                     </button>
