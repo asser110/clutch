@@ -112,25 +112,29 @@ const Landing: React.FC = () => {
   };
 
 
-  const copyLink = () => {
-    if (inviteLink) {
-      navigator.clipboard.writeText(inviteLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
-    }
-  };
+  const [dbStatus, setDbStatus] = useState<'testing' | 'online' | 'offline'>('testing');
+  const [dbError, setDbError] = useState<string | null>(null);
 
-  const handleCloseModal = () => {
-    setShowAdminModal(false);
-    setInviteLink(null);
-  };
+  useEffect(() => {
+    const checkDb = async () => {
+      const { testConnection } = await import('./lib/supabaseClient');
+      const result = await testConnection();
+      if (result.success) {
+        setDbStatus('online');
+      } else {
+        setDbStatus('offline');
+        setDbError(result.error || 'Unknown Error');
+      }
+    };
+    checkDb();
+  }, []);
 
   if (currentPage === 'login') {
     return <LoginComponent onBack={() => setCurrentPage('landing')} />;
   }
 
   return (
-    <div className="font-press-start bg-indigo-950 text-white min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative">
+    <div className="font-press-start bg-[#0a0a2a] text-white min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative">
 
       <div className="absolute top-6 left-6 md:top-8 md:left-8">
         {!brandingAnimationComplete ? (
@@ -182,7 +186,7 @@ const Landing: React.FC = () => {
         <div className="absolute bottom-6 left-6 flex items-center gap-2">
           <div
             className={`w-3 h-3 rounded-full ${dbStatus === 'testing' ? 'bg-yellow-500 animate-pulse' :
-                dbStatus === 'online' ? 'bg-green-500' : 'bg-red-500 shadow-[0_0_8px_#f00]'
+              dbStatus === 'online' ? 'bg-green-500' : 'bg-red-500 shadow-[0_0_8px_#f00]'
               }`}
             title={dbStatus === 'offline' ? `Offline: ${dbError}` : 'Supabase Status'}
           />
