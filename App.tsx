@@ -101,15 +101,22 @@ const Landing: React.FC = () => {
     }
   }, [currentPage]);
 
+  const [flashing, setFlashing] = useState(false);
+
   const generateInviteLink = () => {
-    // Guaranteed unique token using timestamp + random string
-    const token = Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15);
+    // Salted unique token
+    const token = Math.random().toString(36).substring(2, 10) + Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
 
     const expires = Date.now() + 15 * 60 * 1000; // 15 minutes from now
     const link = `${window.location.origin}/signup?token=${token}&expires=${expires}`;
     setInviteLink(link);
     setCopied(false);
+
+    // Trigger visual flash
+    setFlashing(true);
+    setTimeout(() => setFlashing(false), 500);
   };
+
 
 
   const [dbStatus, setDbStatus] = useState<'testing' | 'online' | 'offline'>('testing');
@@ -232,7 +239,12 @@ const Landing: React.FC = () => {
               ) : (
                 <>
                   <div className="flex gap-2 items-center">
-                    <input type="text" readOnly value={inviteLink} className="w-full p-3 bg-gray-800 border-2 border-gray-600 text-gray-300 focus:outline-none" />
+                    <input
+                      type="text"
+                      readOnly
+                      value={inviteLink}
+                      className={`w-full p-3 bg-gray-800 border-2 border-gray-600 text-gray-300 focus:outline-none transition-all duration-300 ${flashing ? 'border-white bg-gray-700' : ''}`}
+                    />
                     <button
                       onClick={() => setInviteLink(null)}
                       className="text-gray-500 hover:text-white transition-colors p-2 text-xl font-bold focus:outline-none"

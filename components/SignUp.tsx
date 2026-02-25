@@ -114,7 +114,8 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, onNav
     return (
       <div className="font-press-start bg-black text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center">
         <h1 className="text-5xl mb-8">SUCCESS!</h1>
-        <p className="text-gray-400 mb-8">Your account has been created. Please check your email to verify your account.</p>
+        <p className="text-gray-400 mb-8">Your account has been created successfully. You can now access your dashboard.</p>
+
         <button onClick={onSignUpSuccess} className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none">
           CONTINUE
         </button>
