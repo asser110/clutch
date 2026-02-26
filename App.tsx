@@ -116,7 +116,7 @@ const Landing: React.FC = () => {
 
     if (error) {
       console.error('Error saving invite:', error);
-      alert('DATABASE ERROR: Make sure you ran the SQL script in Supabase!');
+      alert(`DATABASE ERROR: ${error.message}\n\nMake sure you ran the SQL script in Supabase SQL Editor!`);
       return;
     }
 
