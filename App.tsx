@@ -40,6 +40,19 @@ const App: React.FC = () => {
 const Landing: React.FC = () => {
   const { pathname, search } = window.location;
 
+  const [theme, setTheme] = useState<'blue' | 'black'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('clutch-theme') as 'blue' | 'black') || 'blue';
+    }
+    return 'blue';
+  });
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'blue' ? 'black' : 'blue';
+    setTheme(newTheme);
+    localStorage.setItem('clutch-theme', newTheme);
+  };
+
   // Simple router for signup page
   if (pathname.startsWith('/signup')) {
     const params = new URLSearchParams(search);
@@ -54,6 +67,7 @@ const Landing: React.FC = () => {
     return <SignUpComponent
       token={token}
       expires={expires}
+      theme={theme}
       onNavigateHome={handleNavigateHome}
       onSignUpSuccess={() => {
         window.location.pathname = '/';
@@ -151,19 +165,6 @@ const Landing: React.FC = () => {
 
 
 
-
-  const [theme, setTheme] = useState<'blue' | 'black'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('clutch-theme') as 'blue' | 'black') || 'blue';
-    }
-    return 'blue';
-  });
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'blue' ? 'black' : 'blue';
-    setTheme(newTheme);
-    localStorage.setItem('clutch-theme', newTheme);
-  };
 
   const [dbStatus, setDbStatus] = useState<'testing' | 'online' | 'offline'>('testing');
   const [dbError, setDbError] = useState<string | null>(null);
