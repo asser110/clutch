@@ -152,6 +152,19 @@ const Landing: React.FC = () => {
 
 
 
+  const [theme, setTheme] = useState<'blue' | 'black'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('clutch-theme') as 'blue' | 'black') || 'blue';
+    }
+    return 'blue';
+  });
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'blue' ? 'black' : 'blue';
+    setTheme(newTheme);
+    localStorage.setItem('clutch-theme', newTheme);
+  };
+
   const [dbStatus, setDbStatus] = useState<'testing' | 'online' | 'offline'>('testing');
   const [dbError, setDbError] = useState<string | null>(null);
 
@@ -187,7 +200,7 @@ const Landing: React.FC = () => {
   }
 
   return (
-    <div className="font-press-start bg-[#0a0a40] text-white min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative">
+    <div className={`font-press-start ${theme === 'blue' ? 'bg-[#0a0a40]' : 'bg-black'} text-white min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative transition-colors duration-500`}>
 
       <div className="absolute top-6 left-6 md:top-8 md:left-8">
         {!brandingAnimationComplete ? (
@@ -243,12 +256,19 @@ const Landing: React.FC = () => {
               }`}
             title={dbStatus === 'offline' ? `Offline: ${dbError}` : 'Supabase Status'}
           />
-          <span className="text-[10px] text-gray-500">v4.0</span>
+          <span className="text-[10px] text-gray-500">v7.0</span>
         </div>
       </div>
 
 
-      <div className="absolute bottom-8 right-8">
+      <div className="absolute bottom-8 right-8 flex items-center gap-4">
+        <button
+          onClick={toggleTheme}
+          className="text-xs text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none border border-gray-700 px-2 py-1 rounded"
+          title="Toggle Theme"
+        >
+          {theme === 'blue' ? 'CLASSIC' : 'MODERN'}
+        </button>
         <button onClick={() => setShowAdminModal(true)} className="text-sm text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
           ADMIN
         </button>
@@ -258,7 +278,7 @@ const Landing: React.FC = () => {
         <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4">
           <style>{`.animate-login-fade-in { animation: login-fade-in 0.4s ease-out forwards; } @keyframes login-fade-in { from { opacity: 0; } to { opacity: 1; } }`}</style>
           <div className="bg-gray-900 p-8 border-2 border-gray-600 text-white w-full max-w-md flex flex-col animate-login-fade-in">
-            <h2 className="text-2xl mb-2">ADMIN INVITE LINK v4.0</h2>
+            <h2 className="text-2xl mb-2">ADMIN INVITE LINK v7.0</h2>
             <p className="text-sm text-gray-400 mb-6">This link expires in 15 minutes.</p>
 
             <div className="flex flex-col gap-4">

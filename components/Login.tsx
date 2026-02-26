@@ -32,15 +32,23 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
     if (error) {
       setError(error.message);
     } else {
-      // Set a flag in session storage to indicate a new login event.
-      // The Dashboard component will use this to show a one-time notification.
+      // Record login audit for security alerts
+      await supabase.from('login_audits').insert([{
+        user_id: (await supabase.auth.getUser()).data.user?.id,
+        email: email,
+        metadata: {
+          user_agent: navigator.userAgent,
+          timestamp: new Date().toISOString()
+        }
+      }]);
+
       sessionStorage.setItem('clutch-new-login', 'true');
       setSuccess(true);
       // The onAuthStateChange listener in App.tsx will now handle the redirect.
     }
     setLoading(false);
   };
-  
+
   return (
     <div className="font-press-start bg-black text-white h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
       <style>{`
@@ -97,8 +105,8 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
           </div>
           {error && <p className="text-red-500 text-xs text-left -mb-2">{error}</p>}
           {success && <p className="text-green-500 text-xs text-left -mb-2">SUCCESS! REDIRECTING...</p>}
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading || success}
             className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
           >
