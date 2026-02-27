@@ -103,8 +103,15 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, theme
       return;
     }
 
-    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means not found, which is what we want
-      console.error('Error checking username:', checkError);
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Database Error (Check):', checkError);
+      if (checkError.message.includes('relation "profiles" does not exist')) {
+        setErrors({ form: 'DATABASE ERROR: The "profiles" table is missing. Did you run the SQL script in Supabase?' });
+      } else {
+        setErrors({ form: `DATABASE ERROR: ${checkError.message}` });
+      }
+      setLoading(false);
+      return;
     }
 
     // 2. Proceed with Signup
@@ -136,8 +143,11 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, theme
 
       if (profileError) {
         console.error('Error creating profile:', profileError);
-        // We don't block the UI here since the user is technically created in Auth,
-        // but it's a critical error for uniqueness.
+        if (profileError.message.includes('relation "profiles" does not exist')) {
+          setErrors({ form: 'CRITICAL ERROR: "profiles" table missing. Contact Admin to run SQL script.' });
+          setLoading(false);
+          return;
+        }
       }
       setIsSignedUp(true);
     }
