@@ -3,6 +3,7 @@ import TypingAnimation from './components/TypingAnimation';
 import LoginComponent from './components/Login';
 import SignUpComponent from './components/SignUp';
 import Dashboard from './components/Dashboard';
+import ResetPassword from './components/ResetPassword';
 import { supabase } from './lib/supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
@@ -72,6 +73,19 @@ const Landing: React.FC = () => {
       onSignUpSuccess={() => {
         window.location.pathname = '/';
       }}
+    />;
+  }
+
+  // Handle password reset route
+  if (pathname.startsWith('/reset-password')) {
+    const handleNavigateHome = () => {
+      window.history.pushState({}, '', '/');
+      window.location.pathname = '/';
+    };
+
+    return <ResetPassword
+      onBack={handleNavigateHome}
+      theme={theme}
     />;
   }
 
