@@ -39,7 +39,8 @@ const App: React.FC = () => {
 
 // Extracted the original App component logic into a Landing component
 const Landing: React.FC = () => {
-  const { pathname, search } = window.location;
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const { search } = window.location;
 
   const [theme, setTheme] = useState<'blue' | 'black'>(() => {
     if (typeof window !== 'undefined') {
@@ -55,14 +56,14 @@ const Landing: React.FC = () => {
   };
 
   // Simple router for signup page
-  if (pathname.startsWith('/signup')) {
+  if (currentPath.startsWith('/signup')) {
     const params = new URLSearchParams(search);
     const token = params.get('token');
     const expires = params.get('expires');
 
     const handleNavigateHome = () => {
       window.history.pushState({}, '', '/');
-      window.location.pathname = '/';
+      setCurrentPath('/');
     };
 
     return <SignUpComponent
@@ -71,16 +72,18 @@ const Landing: React.FC = () => {
       theme={theme}
       onNavigateHome={handleNavigateHome}
       onSignUpSuccess={() => {
-        window.location.pathname = '/';
+        window.history.pushState({}, '', '/');
+        setCurrentPath('/');
+        setCurrentPage('login'); // Go directly to login
       }}
     />;
   }
 
   // Handle password reset route
-  if (pathname.startsWith('/reset-password')) {
+  if (currentPath.startsWith('/reset-password')) {
     const handleNavigateHome = () => {
       window.history.pushState({}, '', '/');
-      window.location.pathname = '/';
+      setCurrentPath('/');
     };
 
     return <ResetPassword
@@ -271,7 +274,7 @@ const Landing: React.FC = () => {
               }`}
             title={dbStatus === 'offline' ? `Offline: ${dbError}` : 'Supabase Status'}
           />
-          <span className="text-[10px] text-gray-500">v7.3</span>
+          <span className="text-[10px] text-gray-500">v7.4</span>
         </div>
       </div>
 
@@ -293,7 +296,7 @@ const Landing: React.FC = () => {
         <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4">
           <style>{`.animate-login-fade-in { animation: login-fade-in 0.4s ease-out forwards; } @keyframes login-fade-in { from { opacity: 0; } to { opacity: 1; } }`}</style>
           <div className="bg-gray-900 p-8 border-2 border-gray-600 text-white w-full max-w-md flex flex-col animate-login-fade-in">
-            <h2 className="text-2xl mb-2">ADMIN INVITE LINK v7.3</h2>
+            <h2 className="text-2xl mb-2">ADMIN INVITE LINK v7.4</h2>
             <p className="text-sm text-gray-400 mb-6">This link expires in 15 minutes.</p>
 
             <div className="flex flex-col gap-4">
