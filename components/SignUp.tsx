@@ -134,8 +134,10 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, theme
 
     if (signUpData.user) {
       // SUCCESS! 
-      // Note: We no longer manually insert into 'profiles'. 
-      // The Database Trigger 'on_auth_user_created' handles this automatically.
+      // 1. Sign out immediately so we don't auto-redirect to Dashboard
+      await supabase.auth.signOut();
+
+      // 2. Show the success screen
       setIsSignedUp(true);
     }
     setLoading(false);

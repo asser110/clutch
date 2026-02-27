@@ -72,9 +72,10 @@ const Landing: React.FC = () => {
       theme={theme}
       onNavigateHome={handleNavigateHome}
       onSignUpSuccess={() => {
+        sessionStorage.setItem('clutch-goto-login', 'true');
         window.history.pushState({}, '', '/');
         setCurrentPath('/');
-        setCurrentPage('login'); // Go directly to login
+        setCurrentPage('login');
       }}
     />;
   }
@@ -93,7 +94,13 @@ const Landing: React.FC = () => {
   }
 
   // --- Landing/Login Page Logic ---
-  const [currentPage, setCurrentPage] = useState('landing');
+  const [currentPage, setCurrentPage] = useState(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('clutch-goto-login') === 'true') {
+      sessionStorage.removeItem('clutch-goto-login');
+      return 'login';
+    }
+    return 'landing';
+  });
   const [brandingAnimationComplete, setBrandingAnimationComplete] = useState(false);
   const [welcomeAnimationComplete, setWelcomeAnimationComplete] = useState(false);
   const [showButton, setShowButton] = useState(false);
