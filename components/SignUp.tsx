@@ -90,7 +90,25 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, theme
     setLoading(true);
     setErrors({});
 
-    const { error } = await supabase.auth.signUp({
+    // 1. Check if username is already taken in profiles table
+    const { data: existingUser, error: checkError } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', username.trim().toLowerCase())
+      .single();
+
+    if (existingUser) {
+      setErrors({ username: 'USERNAME IS ALREADY TAKEN' });
+      setLoading(false);
+      return;
+    }
+
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means not found, which is what we want
+      console.error('Error checking username:', checkError);
+    }
+
+    // 2. Proceed with Signup
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -100,10 +118,27 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, theme
       },
     });
 
-    if (error) {
-      console.error('Signup Failure Deep Audit:', error);
-      setErrors({ form: `ERROR [v4.0]: ${error.message} (Check Console)` });
-    } else {
+    if (signUpError) {
+      console.error('Signup Failure:', signUpError);
+      setErrors({ form: `ERROR: ${signUpError.message}` });
+      setLoading(false);
+      return;
+    }
+
+    if (signUpData.user) {
+      // 3. Create entry in profiles table to lock in the unique username
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([{
+          id: signUpData.user.id,
+          username: username.trim().toLowerCase()
+        }]);
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError);
+        // We don't block the UI here since the user is technically created in Auth,
+        // but it's a critical error for uniqueness.
+      }
       setIsSignedUp(true);
     }
     setLoading(false);
