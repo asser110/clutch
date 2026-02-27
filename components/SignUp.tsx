@@ -133,22 +133,9 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, theme
     }
 
     if (signUpData.user) {
-      // 3. Create entry in profiles table to lock in the unique username
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([{
-          id: signUpData.user.id,
-          username: username.trim().toLowerCase()
-        }]);
-
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
-        if (profileError.message.includes('relation "profiles" does not exist')) {
-          setErrors({ form: 'CRITICAL ERROR: "profiles" table missing. Contact Admin to run SQL script.' });
-          setLoading(false);
-          return;
-        }
-      }
+      // SUCCESS! 
+      // Note: We no longer manually insert into 'profiles'. 
+      // The Database Trigger 'on_auth_user_created' handles this automatically.
       setIsSignedUp(true);
     }
     setLoading(false);
