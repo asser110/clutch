@@ -143,11 +143,11 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
 
     if (signUpData.user) {
       // SUCCESS! 
-      // 1. Sign out immediately so we don't auto-redirect to Dashboard
-      await supabase.auth.signOut();
-
-      // 2. Show the success screen
+      // 1. Show the success screen IMMEDIATELY (prevents flicker)
       setIsSignedUp(true);
+
+      // 2. Sign out in the background to clean up auto-login
+      await supabase.auth.signOut();
     }
     setLoading(false);
   };
