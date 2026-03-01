@@ -126,14 +126,6 @@ const Landing: React.FC<LandingProps> = ({
     />;
   }
 
-  // --- Landing/Login Page Logic ---
-  const [currentPage, setCurrentPage] = useState(() => {
-    if (typeof window !== 'undefined' && sessionStorage.getItem('clutch-goto-login') === 'true') {
-      sessionStorage.removeItem('clutch-goto-login');
-      return 'login';
-    }
-    return 'landing';
-  });
   const [brandingAnimationComplete, setBrandingAnimationComplete] = useState(false);
   const [welcomeAnimationComplete, setWelcomeAnimationComplete] = useState(false);
   const [showButton, setShowButton] = useState(false);

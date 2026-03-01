@@ -5,9 +5,10 @@ import { InfoIcon, CloseIcon } from './icons';
 
 interface DashboardProps {
   session: Session;
+  theme: 'blue' | 'black';
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ session }) => {
+const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   const [showLoginNotification, setShowLoginNotification] = useState(false);
 
   useEffect(() => {
@@ -27,7 +28,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   }, []);
 
   return (
-    <div className="bg-black text-white min-h-screen w-full flex flex-col relative">
+    <div className={`${theme === 'blue' ? 'bg-[#0a0a40]' : 'bg-black'} text-white min-h-screen w-full flex flex-col relative transition-colors duration-500`}>
       {/* 
         NOTE: The actual email sending for this notification would be handled 
         by a backend service, such as a Supabase Edge Function, triggered on login.
@@ -50,8 +51,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                 <strong className="text-white">{session.user.email}</strong>.
               </p>
             </div>
-            <button 
-              onClick={() => setShowLoginNotification(false)} 
+            <button
+              onClick={() => setShowLoginNotification(false)}
               className="text-gray-400 hover:text-white transition-colors duration-200"
               aria-label="Dismiss notification"
             >
