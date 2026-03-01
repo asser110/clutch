@@ -8,9 +8,19 @@ interface SignUpComponentProps {
   theme?: 'blue' | 'black';
   onNavigateHome: () => void;
   onSignUpSuccess: () => void;
+  isSignedUp: boolean;
+  setIsSignedUp: (val: boolean) => void;
 }
 
-const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, theme = 'blue', onNavigateHome, onSignUpSuccess }) => {
+const SignUpComponent: React.FC<SignUpComponentProps> = ({
+  token,
+  expires,
+  theme = 'blue',
+  onNavigateHome,
+  onSignUpSuccess,
+  isSignedUp,
+  setIsSignedUp
+}) => {
   const [isValid, setIsValid] = useState<boolean | null>(null);
   const [isExpired, setIsExpired] = useState(false);
 
@@ -19,7 +29,6 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({ token, expires, theme
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [isSignedUp, setIsSignedUp] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [passwordVisible, setPasswordVisible] = useState(false);

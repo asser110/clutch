@@ -26,6 +26,7 @@ const App: React.FC = () => {
     }
     return 'blue';
   });
+  const [isSignedUp, setIsSignedUp] = useState(false);
 
   const toggleTheme = () => {
     const newTheme = theme === 'blue' ? 'black' : 'blue';
@@ -61,6 +62,8 @@ const App: React.FC = () => {
         setCurrentPage={setCurrentPage}
         theme={theme}
         toggleTheme={toggleTheme}
+        isSignedUp={isSignedUp}
+        setIsSignedUp={setIsSignedUp}
       />
     );
   }
@@ -75,6 +78,8 @@ interface LandingProps {
   setCurrentPage: (page: string) => void;
   theme: 'blue' | 'black';
   toggleTheme: () => void;
+  isSignedUp: boolean;
+  setIsSignedUp: (val: boolean) => void;
 }
 
 // Extracted the original App component logic into a Landing component
@@ -84,7 +89,9 @@ const Landing: React.FC<LandingProps> = ({
   currentPage,
   setCurrentPage,
   theme,
-  toggleTheme
+  toggleTheme,
+  isSignedUp,
+  setIsSignedUp
 }) => {
   const { search } = window.location;
 
@@ -109,7 +116,10 @@ const Landing: React.FC<LandingProps> = ({
         window.history.pushState({}, '', '/');
         setCurrentPath('/');
         setCurrentPage('login');
+        setIsSignedUp(false); // Reset for next time
       }}
+      isSignedUp={isSignedUp}
+      setIsSignedUp={setIsSignedUp}
     />;
   }
 
@@ -306,7 +316,7 @@ const Landing: React.FC<LandingProps> = ({
               }`}
             title={dbStatus === 'offline' ? `Offline: ${dbError}` : 'Supabase Status'}
           />
-          <span className="text-[10px] text-gray-500">v7.4.3</span>
+          <span className="text-[10px] text-gray-500">v7.4.4</span>
         </div>
       </div>
 
@@ -328,7 +338,7 @@ const Landing: React.FC<LandingProps> = ({
         <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4">
           <style>{`.animate-login-fade-in { animation: login-fade-in 0.4s ease-out forwards; } @keyframes login-fade-in { from { opacity: 0; } to { opacity: 1; } }`}</style>
           <div className="bg-gray-900 p-8 border-2 border-gray-600 text-white w-full max-w-md flex flex-col animate-login-fade-in">
-            <h2 className="text-2xl mb-2">ADMIN INVITE LINK v7.4.3</h2>
+            <h2 className="text-2xl mb-2">ADMIN INVITE LINK v7.4.4</h2>
             <p className="text-sm text-gray-400 mb-6">This link expires in 15 minutes.</p>
 
             <div className="flex flex-col gap-4">
