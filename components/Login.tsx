@@ -49,6 +49,26 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
     setLoading(false);
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError("PLEASE ENTER YOUR EMAIL FIRST");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      setError(error.message);
+    } else {
+      setSuccess(true);
+      setError(null);
+      alert("A HACKER-KILL LINK HAS BEEN SENT TO YOUR EMAIL! 📧🛡️");
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="font-press-start bg-black text-white h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
       <style>{`
@@ -102,6 +122,15 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
               className="appearance-none h-5 w-5 cursor-pointer bg-gray-900 border-2 border-gray-600 checked:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white"
             />
             <label htmlFor="remember-me" className="text-sm cursor-pointer select-none">REMEMBER ME</label>
+          </div>
+          <div className="text-left -mt-2">
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-[10px] text-gray-500 hover:text-white transition-colors focus:outline-none"
+            >
+              FORGOT PASSWORD?
+            </button>
           </div>
           {error && <p className="text-red-500 text-xs text-left -mb-2">{error}</p>}
           {success && <p className="text-green-500 text-xs text-left -mb-2">SUCCESS! REDIRECTING...</p>}

@@ -56,8 +56,12 @@ const App: React.FC = () => {
     };
     getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      if (event === 'PASSWORD_RECOVERY') {
+        setCurrentPath('/reset-password');
+        setCurrentPage('reset-password');
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -142,6 +146,20 @@ const Landing: React.FC<LandingProps> = ({
     const handleNavigateHome = () => {
       window.history.pushState({}, '', '/');
       setCurrentPath('/');
+    };
+
+    return <ResetPassword
+      onBack={handleNavigateHome}
+      theme={theme}
+    />;
+  }
+
+  // Handle password reset route (Hacker-Proof flow)
+  if (currentPath.startsWith('/reset-password') || currentPage === 'reset-password') {
+    const handleNavigateHome = () => {
+      window.history.pushState({}, '', '/');
+      setCurrentPath('/');
+      setCurrentPage('landing');
     };
 
     return <ResetPassword
@@ -330,7 +348,7 @@ const Landing: React.FC<LandingProps> = ({
               }`}
             title={dbStatus === 'offline' ? `Offline: ${dbError}` : 'Supabase Status'}
           />
-          <span className="text-[10px] text-gray-500">v7.4.7</span>
+          <span className="text-[10px] text-gray-500">v7.4.8</span>
         </div>
       </div>
 
@@ -352,7 +370,7 @@ const Landing: React.FC<LandingProps> = ({
         <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4">
           <style>{`.animate-login-fade-in { animation: login-fade-in 0.4s ease-out forwards; } @keyframes login-fade-in { from { opacity: 0; } to { opacity: 1; } }`}</style>
           <div className="bg-gray-900 p-8 border-2 border-gray-600 text-white w-full max-w-md flex flex-col animate-login-fade-in">
-            <h2 className="text-2xl mb-2">ADMIN INVITE LINK v7.4.7</h2>
+            <h2 className="text-2xl mb-2">ADMIN INVITE LINK v7.4.8</h2>
             <p className="text-sm text-gray-400 mb-6">This link expires in 15 minutes.</p>
 
             <div className="flex flex-col gap-4">
