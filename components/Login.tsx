@@ -7,9 +7,11 @@ interface LoginComponentProps {
 }
 
 const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
+  const [view, setView] = useState<'login' | 'otp'>('login');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -24,15 +26,50 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
     setError(null);
     setSuccess(false);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    // Step 1: Check Password
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) {
-      setError(error.message);
+    if (signInError) {
+      setError(signInError.message);
+      setLoading(false);
+      return;
+    }
+
+    // Step 2: Trigger OTP for 2FA (Using Magic Link/OTP backend)
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+      }
+    });
+
+    if (otpError) {
+      setError("PASSWORD CORRECT, BUT FAILED TO SEND 2FA CODE: " + otpError.message);
     } else {
-      // Record login audit for security alerts
+      setView('otp');
+      setError(null);
+    }
+    setLoading(false);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: otpCode,
+      type: 'email',
+    });
+
+    if (error) {
+      setError("INVALID OR EXPIRED CODE");
+    } else {
+      // Record login audit ONLY after full 2FA success
       await supabase.from('login_audits').insert([{
         user_id: (await supabase.auth.getUser()).data.user?.id,
         email: email,
@@ -44,7 +81,6 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
 
       sessionStorage.setItem('clutch-new-login', 'true');
       setSuccess(true);
-      // The onAuthStateChange listener in App.tsx will now handle the redirect.
     }
     setLoading(false);
   };
@@ -84,64 +120,104 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
             &lt;&lt; BACK
           </button>
         </header>
-        <h1 className="text-5xl mb-12">LOGIN</h1>
-        <form className="flex flex-col gap-6" onSubmit={handleLogin}>
-          <div>
-            <label htmlFor="email" className="block text-left text-sm mb-2">EMAIL</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
-              placeholder="ENTER EMAIL..."
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="password" className="block text-left text-sm mb-2">PASSWORD</label>
-            <div className="relative">
+        <h1 className="text-5xl mb-12">{view === 'login' ? 'LOGIN' : 'SECURE'}</h1>
+
+        {view === 'login' ? (
+          <form className="flex flex-col gap-6" onSubmit={handleLogin}>
+            <div>
+              <label htmlFor="email" className="block text-left text-sm mb-2">EMAIL</label>
               <input
-                id="password"
-                type={passwordVisible ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-3 pr-12 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
-                placeholder="ENTER PASSWORD..."
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
+                placeholder="ENTER EMAIL..."
                 required
               />
-              <button type="button" onClick={togglePasswordVisibility} className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
-                {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
+            </div>
+            <div>
+              <label htmlFor="password" className="block text-left text-sm mb-2">PASSWORD</label>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={passwordVisible ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full p-3 pr-12 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
+                  placeholder="ENTER PASSWORD..."
+                  required
+                />
+                <button type="button" onClick={togglePasswordVisibility} className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
+                  {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 self-start -mt-2">
+              <input
+                id="remember-me"
+                type="checkbox"
+                className="appearance-none h-5 w-5 cursor-pointer bg-gray-900 border-2 border-gray-600 checked:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white"
+              />
+              <label htmlFor="remember-me" className="text-sm cursor-pointer select-none">REMEMBER ME</label>
+            </div>
+            <div className="text-left -mt-2">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-[10px] text-gray-500 hover:text-white transition-colors focus:outline-none"
+              >
+                FORGOT PASSWORD?
               </button>
             </div>
-          </div>
-          <div className="flex items-center gap-3 self-start -mt-2">
-            <input
-              id="remember-me"
-              type="checkbox"
-              className="appearance-none h-5 w-5 cursor-pointer bg-gray-900 border-2 border-gray-600 checked:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white"
-            />
-            <label htmlFor="remember-me" className="text-sm cursor-pointer select-none">REMEMBER ME</label>
-          </div>
-          <div className="text-left -mt-2">
+            {error && <p className="text-red-500 text-xs text-left -mb-2">{error}</p>}
+            {success && <p className="text-green-500 text-xs text-left -mb-2">SUCCESS! REDIRECTING...</p>}
+            <button
+              type="submit"
+              disabled={loading || success}
+              className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
+            >
+              {loading ? 'NEXT...' : 'ENTER'}
+            </button>
+          </form>
+        ) : (
+          <form className="flex flex-col gap-6" onSubmit={handleVerifyOtp}>
+            <div className="text-center mb-4">
+              <p className="text-[10px] text-gray-400 leading-relaxed">
+                A 6-DIGIT SECURITY CODE HAS BEEN SENT TO YOUR EMAIL.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="otp" className="block text-left text-sm mb-2">SECURITY CODE</label>
+              <input
+                id="otp"
+                type="text"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value)}
+                className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white text-center tracking-[1rem] text-xl placeholder-gray-700"
+                placeholder="000000"
+                required
+              />
+            </div>
+            {error && <p className="text-red-500 text-xs text-left -mb-2">{error}</p>}
+            {success && <p className="text-green-500 text-xs text-left -mb-2">IDENTITY VERIFIED!</p>}
+            <button
+              type="submit"
+              disabled={loading || success}
+              className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
+            >
+              {loading ? 'VERIFYING...' : 'VERIFY'}
+            </button>
             <button
               type="button"
-              onClick={handleForgotPassword}
-              className="text-[10px] text-gray-500 hover:text-white transition-colors focus:outline-none"
+              onClick={() => setView('login')}
+              className="text-[10px] text-gray-500 hover:text-white transition-colors focus:outline-none mt-2"
             >
-              FORGOT PASSWORD?
+              &lt; USE DIFFERENT PASSWORD
             </button>
-          </div>
-          {error && <p className="text-red-500 text-xs text-left -mb-2">{error}</p>}
-          {success && <p className="text-green-500 text-xs text-left -mb-2">SUCCESS! REDIRECTING...</p>}
-          <button
-            type="submit"
-            disabled={loading || success}
-            className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
-          >
-            {loading ? 'ENTERING...' : 'ENTER'}
-          </button>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );
