@@ -4,9 +4,10 @@ import { supabase } from '../lib/supabaseClient';
 
 interface LoginComponentProps {
   onBack: () => void;
+  onForgotPassword: () => void;
 }
 
-const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
+const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPassword }) => {
   const [view, setView] = useState<'login' | 'otp'>('login');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [email, setEmail] = useState('');
@@ -85,25 +86,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
     setLoading(false);
   };
 
-  const handleForgotPassword = async () => {
-    if (!email) {
-      setError("PLEASE ENTER YOUR EMAIL FIRST");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess(true);
-      setError(null);
-      alert("A HACKER-KILL LINK HAS BEEN SENT TO YOUR EMAIL! 📧🛡️");
-    }
-    setLoading(false);
-  };
+  // Forgot Password is now handled by the parent routing to the dedicated page
 
   return (
     <div className="font-press-start bg-black text-white h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
@@ -164,7 +147,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack }) => {
             <div className="text-left -mt-2">
               <button
                 type="button"
-                onClick={handleForgotPassword}
+                onClick={onForgotPassword}
                 className="text-[10px] text-gray-500 hover:text-white transition-colors focus:outline-none"
               >
                 FORGOT PASSWORD?

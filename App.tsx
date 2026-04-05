@@ -3,7 +3,7 @@ import TypingAnimation from './components/TypingAnimation';
 import LoginComponent from './components/Login';
 import SignUpComponent from './components/SignUp';
 import Dashboard from './components/Dashboard';
-import ResetPassword from './components/ResetPassword';
+import ForgotPassword from './components/ForgotPassword';
 import { supabase } from './lib/supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
@@ -141,20 +141,7 @@ const Landing: React.FC<LandingProps> = ({
     />;
   }
 
-  // Handle password reset route
-  if (currentPath.startsWith('/reset-password')) {
-    const handleNavigateHome = () => {
-      window.history.pushState({}, '', '/');
-      setCurrentPath('/');
-    };
-
-    return <ResetPassword
-      onBack={handleNavigateHome}
-      theme={theme}
-    />;
-  }
-
-  // Handle password reset route (Hacker-Proof flow)
+  // Handle dedicated forgot/reset password routes
   if (currentPath.startsWith('/reset-password') || currentPage === 'reset-password') {
     const handleNavigateHome = () => {
       window.history.pushState({}, '', '/');
@@ -162,9 +149,24 @@ const Landing: React.FC<LandingProps> = ({
       setCurrentPage('landing');
     };
 
-    return <ResetPassword
+    return <ForgotPassword
       onBack={handleNavigateHome}
       theme={theme}
+      initialView="password" // If they came via a magic link event
+    />;
+  }
+
+  if (currentPath.startsWith('/forgot-password') || currentPage === 'forgot-password') {
+    const handleNavigateHome = () => {
+      window.history.pushState({}, '', '/');
+      setCurrentPath('/');
+      setCurrentPage('landing');
+    };
+
+    return <ForgotPassword
+      onBack={handleNavigateHome}
+      theme={theme}
+      initialView="email"
     />;
   }
 
@@ -288,7 +290,10 @@ const Landing: React.FC<LandingProps> = ({
   };
 
   if (currentPage === 'login') {
-    return <LoginComponent onBack={() => setCurrentPage('landing')} />;
+    return <LoginComponent 
+      onBack={() => setCurrentPage('landing')} 
+      onForgotPassword={() => setCurrentPage('forgot-password')}
+    />;
   }
 
   return (
