@@ -32,7 +32,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
       setError(error.message);
     } else {
       setView('otp');
-      setSuccessMsg("If an account exists, a secure 6-digit code has been sent. Please check your email.");
+      setSuccessMsg("If an account exists, a secure 8-digit code has been sent. Please check your email.");
     }
     setLoading(false);
   };
@@ -110,7 +110,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
         </h1>
         <p className="text-gray-400 text-[10px] mb-8 uppercase tracking-widest">
           {view === 'email' && 'ENTER EMAIL TO RECEIVE CODE'}
-          {view === 'otp' && 'ENTER THE 6-DIGIT SECURITY CODE'}
+          {view === 'otp' && 'ENTER THE 8-DIGIT SECURITY CODE'}
           {view === 'password' && 'CREATE YOUR NEW PASSWORD'}
         </p>
 
@@ -150,15 +150,15 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
         {view === 'otp' && (
           <form className="flex flex-col gap-6" onSubmit={handleVerifyOtp}>
             <div>
-              <label htmlFor="otp" className="block text-left text-sm mb-2">6-DIGIT CODE</label>
+              <label htmlFor="otp" className="block text-left text-sm mb-2">8-DIGIT CODE</label>
               <input
                 id="otp"
                 type="text"
-                maxLength={6}
+                maxLength={8}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white text-center text-2xl tracking-[1em] placeholder:tracking-normal placeholder:text-sm placeholder:text-gray-500"
-                placeholder="------"
+                placeholder="--------"
                 required
               />
             </div>
@@ -167,7 +167,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
 
             <button
               type="submit"
-              disabled={loading || otpCode.length !== 6}
+              disabled={loading || otpCode.length !== 8}
               className="mt-4 text-[20px] text-black bg-white px-8 py-3 shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none transition-all disabled:bg-gray-400 disabled:translate-x-1 disabled:translate-y-1 disabled:shadow-none font-bold uppercase tracking-widest"
             >
               {loading ? 'VERIFYING...' : 'VERIFY CODE'}

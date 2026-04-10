@@ -167,7 +167,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
           <form className="flex flex-col gap-6" onSubmit={handleVerifyOtp}>
             <div className="text-center mb-4">
               <p className="text-[10px] text-gray-400 leading-relaxed">
-                A 6-DIGIT SECURITY CODE HAS BEEN SENT TO YOUR EMAIL.
+                AN 8-DIGIT SECURITY CODE HAS BEEN SENT TO YOUR EMAIL.
               </p>
             </div>
             <div>
@@ -175,11 +175,11 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
               <input
                 id="otp"
                 type="text"
-                maxLength={6}
+                maxLength={8}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value)}
                 className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white text-center tracking-[1rem] text-xl placeholder-gray-700"
-                placeholder="000000"
+                placeholder="00000000"
                 required
               />
             </div>
@@ -187,7 +187,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
             {success && <p className="text-green-500 text-xs text-left -mb-2">IDENTITY VERIFIED!</p>}
             <button
               type="submit"
-              disabled={loading || success}
+              disabled={loading || success || otpCode.length !== 8}
               className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
             >
               {loading ? 'VERIFYING...' : 'VERIFY'}
