@@ -27,7 +27,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
     setError(null);
     setSuccess(false);
 
-    // Step 1: Check Password
+    // Step 1: Verify password is correct
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -39,7 +39,11 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
       return;
     }
 
-    // Step 2: Trigger OTP for 2FA (Using Magic Link/OTP backend)
+    // Step 2: Password is correct! Sign out immediately to prevent
+    // the app from redirecting to Dashboard before OTP verification
+    await supabase.auth.signOut();
+
+    // Step 3: Send the OTP code via email (uses Magic Link template)
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -48,7 +52,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
     });
 
     if (otpError) {
-      setError("PASSWORD CORRECT, BUT FAILED TO SEND 2FA CODE: " + otpError.message);
+      setError("PASSWORD CORRECT, BUT FAILED TO SEND CODE: " + otpError.message);
     } else {
       setView('otp');
       setError(null);
@@ -71,8 +75,9 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
       setError("INVALID OR EXPIRED CODE");
     } else {
       // Record login audit ONLY after full 2FA success
+      const { data: userData } = await supabase.auth.getUser();
       await supabase.from('login_audits').insert([{
-        user_id: (await supabase.auth.getUser()).data.user?.id,
+        user_id: userData?.user?.id,
         email: email,
         metadata: {
           user_agent: navigator.userAgent,
@@ -154,20 +159,19 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
               </button>
             </div>
             {error && <p className="text-red-500 text-xs text-left -mb-2">{error}</p>}
-            {success && <p className="text-green-500 text-xs text-left -mb-2">SUCCESS! REDIRECTING...</p>}
             <button
               type="submit"
-              disabled={loading || success}
+              disabled={loading}
               className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
             >
-              {loading ? 'NEXT...' : 'ENTER'}
+              {loading ? 'VERIFYING...' : 'ENTER'}
             </button>
           </form>
         ) : (
           <form className="flex flex-col gap-6" onSubmit={handleVerifyOtp}>
             <div className="text-center mb-4">
               <p className="text-[10px] text-gray-400 leading-relaxed">
-                AN 8-DIGIT SECURITY CODE HAS BEEN SENT TO YOUR EMAIL.
+                CHECK YOUR EMAIL FOR THE SECURITY CODE.
               </p>
             </div>
             <div>
@@ -177,8 +181,8 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
                 type="text"
                 maxLength={8}
                 value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white text-center tracking-[1rem] text-xl placeholder-gray-700"
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white text-center tracking-[0.8rem] text-xl placeholder-gray-700"
                 placeholder="00000000"
                 required
               />
@@ -187,17 +191,17 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
             {success && <p className="text-green-500 text-xs text-left -mb-2">IDENTITY VERIFIED!</p>}
             <button
               type="submit"
-              disabled={loading || success || otpCode.length !== 8}
+              disabled={loading || success || otpCode.length < 6}
               className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
             >
               {loading ? 'VERIFYING...' : 'VERIFY'}
             </button>
             <button
               type="button"
-              onClick={() => setView('login')}
+              onClick={() => { setView('login'); setOtpCode(''); setError(null); }}
               className="text-[10px] text-gray-500 hover:text-white transition-colors focus:outline-none mt-2"
             >
-              &lt; USE DIFFERENT PASSWORD
+              &lt; TRY DIFFERENT PASSWORD
             </button>
           </form>
         )}
