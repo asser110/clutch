@@ -5,9 +5,10 @@ import { supabase } from '../lib/supabaseClient';
 interface LoginComponentProps {
   onBack: () => void;
   onForgotPassword: () => void;
+  onSuccess: () => void;
 }
 
-const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPassword }) => {
+const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPassword, onSuccess }) => {
   const [view, setView] = useState<'login' | 'otp'>('login');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [email, setEmail] = useState('');
@@ -87,6 +88,9 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
 
       sessionStorage.setItem('clutch-new-login', 'true');
       setSuccess(true);
+      setTimeout(() => {
+        onSuccess();
+      }, 1500);
     }
     setLoading(false);
   };
@@ -195,13 +199,6 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
               className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
             >
               {loading ? 'VERIFYING...' : 'VERIFY'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setView('login'); setOtpCode(''); setError(null); }}
-              className="text-[10px] text-gray-500 hover:text-white transition-colors focus:outline-none mt-2"
-            >
-              &lt; TRY DIFFERENT PASSWORD
             </button>
           </form>
         )}

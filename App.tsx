@@ -302,6 +302,7 @@ const Landing: React.FC<LandingProps> = ({
     return <LoginComponent 
       onBack={() => setCurrentPage('landing')} 
       onForgotPassword={() => setCurrentPage('forgot-password')}
+      onSuccess={() => setCurrentPage('landing')}
     />;
   }
 
