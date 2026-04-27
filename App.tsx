@@ -71,14 +71,16 @@ const App: React.FC = () => {
     return <div className="bg-black h-screen w-screen"></div>; // Or a proper loading spinner
   }
 
-  // Prevent redirect to Dashboard if they are currently on the forgot password screen
+  // Prevent redirect to Dashboard if they are on login (2FA in progress) or password reset
   const isResettingPassword = 
     currentPage === 'forgot-password' || 
     currentPath.startsWith('/forgot-password') || 
     currentPage === 'reset-password' || 
     currentPath.startsWith('/reset-password');
 
-  if (session && !isSignedUp && !isResettingPassword) {
+  const isOnLoginPage = currentPage === 'login';
+
+  if (session && !isSignedUp && !isResettingPassword && !isOnLoginPage) {
     return <Dashboard session={session} theme={theme} />;
   }
 
