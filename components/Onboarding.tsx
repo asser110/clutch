@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 
@@ -8,21 +8,17 @@ interface OnboardingProps {
   theme: 'blue' | 'black';
 }
 
-const PRESET_AVATARS = [
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Clutch1&backgroundColor=000000',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Clutch2&backgroundColor=000000',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Clutch3&backgroundColor=000000',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Clutch4&backgroundColor=000000',
-];
-
 const DEFAULT_AVATAR = 'https://api.dicebear.com/7.x/identicon/svg?seed=default&backgroundColor=000000';
 
 const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete, theme }) => {
   const [step, setStep] = useState(1);
   const [nickname, setNickname] = useState('');
-  const [selectedAvatar, setSelectedAvatar] = useState(PRESET_AVATARS[0]);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,29 +34,71 @@ const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete, theme }) =
     setStep(2);
   };
 
-  const handleFinalSubmit = async (avatarUrl: string) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Basic validation
+      if (file.size > 2 * 1024 * 1024) {
+        setError('IMAGE MUST BE LESS THAN 2MB');
+        return;
+      }
+      
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
+      setError(null);
+    }
+  };
+
+  const handleFinalSubmit = async (useDefault: boolean = false) => {
     setLoading(true);
     setError(null);
 
-    const { error: insertError } = await supabase
-      .from('profiles')
-      .insert([
-        {
-          id: session.user.id,
-          nickname: nickname.trim(),
-          avatar_url: avatarUrl,
-        }
-      ]);
+    let finalAvatarUrl = DEFAULT_AVATAR;
 
-    if (insertError) {
-      if (insertError.code === '23505') { // Unique violation
-        setError('NICKNAME ALREADY TAKEN. PLEASE GO BACK AND CHOOSE ANOTHER.');
-      } else {
-        setError('INITIALIZATION FAILED: ' + insertError.message);
+    try {
+      if (!useDefault && avatarFile) {
+        const fileExt = avatarFile.name.split('.').pop();
+        const fileName = `${session.user.id}-${Math.random()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, avatarFile);
+
+        if (uploadError) {
+          throw new Error('FAILED TO UPLOAD IMAGE: ' + uploadError.message);
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        finalAvatarUrl = publicUrl;
       }
-      setLoading(false);
-    } else {
+
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: session.user.id,
+            nickname: nickname.trim(),
+            avatar_url: finalAvatarUrl,
+          }
+        ]);
+
+      if (insertError) {
+        if (insertError.code === '23505') { // Unique violation
+          throw new Error('NICKNAME ALREADY TAKEN. PLEASE GO BACK AND CHOOSE ANOTHER.');
+        } else {
+          throw new Error('INITIALIZATION FAILED: ' + insertError.message);
+        }
+      }
+
       onComplete();
+    } catch (err: any) {
+      setError(err.message);
+      setLoading(false);
     }
   };
 
@@ -123,40 +161,46 @@ const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete, theme }) =
               </button>
             </form>
           ) : (
-            <div className="flex flex-col gap-6">
-              <div>
-                <label className="block text-[10px] text-gray-400 mb-4 text-center">SELECT AVATAR (OPTIONAL)</label>
-                <div className="flex justify-between items-center gap-2 mb-8">
-                  {PRESET_AVATARS.map((avatar) => (
-                    <button
-                      key={avatar}
-                      type="button"
-                      onClick={() => setSelectedAvatar(avatar)}
-                      className={`w-14 h-14 border-2 transition-all duration-200 p-1 ${
-                        selectedAvatar === avatar ? 'border-white bg-[#1a1a1a] scale-110' : 'border-[#333] hover:border-gray-500'
-                      }`}
-                    >
-                      <img src={avatar} alt="avatar option" className="w-full h-full" />
-                    </button>
-                  ))}
-                </div>
+            <div className="flex flex-col gap-6 items-center">
+              <label className="block text-[10px] text-gray-400 mb-2 text-center w-full">UPLOAD AVATAR</label>
+              
+              <div 
+                className="w-32 h-32 border-2 border-dashed border-[#333] hover:border-white cursor-pointer flex items-center justify-center bg-[#111] overflow-hidden group transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {avatarPreview ? (
+                  <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="text-center p-2">
+                    <span className="text-[24px] text-gray-500 group-hover:text-white block mb-2">+</span>
+                    <span className="text-[8px] text-gray-500 group-hover:text-white">CLICK TO BROWSE</span>
+                  </div>
+                )}
               </div>
+              
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="image/*" 
+                className="hidden" 
+              />
 
-              <div className="flex flex-col gap-3 mt-4">
+              <div className="flex flex-col gap-3 mt-4 w-full">
                 <button
-                  onClick={() => handleFinalSubmit(selectedAvatar)}
-                  disabled={loading}
+                  onClick={() => handleFinalSubmit(false)}
+                  disabled={loading || !avatarFile}
                   className="text-[14px] text-black bg-white px-8 py-4 transition-all duration-150 border-2 border-white hover:bg-black hover:text-white disabled:bg-gray-600 disabled:border-gray-600 disabled:text-gray-400"
                 >
-                  {loading ? 'PROCESSING...' : 'CONFIRM IDENTITY'}
+                  {loading ? 'UPLOADING...' : 'CONFIRM IDENTITY'}
                 </button>
 
                 <button
-                  onClick={() => handleFinalSubmit(DEFAULT_AVATAR)}
+                  onClick={() => handleFinalSubmit(true)}
                   disabled={loading}
                   className="text-[10px] text-gray-500 hover:text-white transition-colors py-2"
                 >
-                  SKIP FOR NOW
+                  SKIP FOR NOW (DEFAULT IMAGE)
                 </button>
                 
                 <button
