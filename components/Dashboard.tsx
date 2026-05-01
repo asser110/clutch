@@ -132,9 +132,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
 
   const channels = [
     { id: 'friends', name: 'FRIENDS', type: 'text' },
-    { id: 'security', name: 'SECURITY-LOGS', type: 'text' },
-    { id: 'database', name: 'DATABASE-HUB', type: 'text' },
-    { id: 'settings', name: 'SYSTEM-CONFIG', type: 'text' },
+    { id: 'dms', name: 'DIRECT MESSAGES', type: 'text' },
+    { id: 'groups', name: 'GROUPS', type: 'text' },
   ];
 
   const bgColor = theme === 'blue' ? 'bg-[#050520]' : 'bg-black';
@@ -315,15 +314,44 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
             </div>
           )}
 
-          {activeChannel !== 'friends' && (
-            <div className="max-w-3xl w-full border-2 border-[#1a1a1a] p-12 bg-[#050505] relative group mt-20">
-              <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
-              <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
-              
-              <h2 className="text-3xl mb-8 tracking-tighter">RESTRICTED AREA</h2>
-              <p className="text-sm text-gray-500 mb-12 leading-relaxed">
-                THIS CHANNEL IS CURRENTLY UNDER MAINTENANCE. PLEASE RETURN LATER.
-              </p>
+          {activeChannel === 'dms' && (
+            <div className="max-w-4xl w-full h-full flex flex-col relative z-10">
+              <div className="flex-grow border-2 border-[#1a1a1a] p-6 bg-[#050505] relative flex items-center justify-center">
+                <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
+                <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
+                <div className="text-center">
+                  <h3 className="text-xl mb-4 text-gray-500">DIRECT MESSAGES</h3>
+                  <p className="text-[10px] text-gray-600">SELECT A FRIEND FROM YOUR NETWORK TO START TRANSMITTING.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeChannel === 'groups' && (
+            <div className="max-w-4xl w-full h-full flex flex-col relative z-10">
+              <div className="border-2 border-[#1a1a1a] p-6 bg-[#050505] relative mb-8">
+                <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
+                <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
+                
+                <h3 className="text-lg mb-4">INITIALIZE NEW SQUAD</h3>
+                <form className="flex gap-4" onSubmit={(e) => e.preventDefault()}>
+                  <input 
+                    type="text" 
+                    placeholder="ENTER_SQUAD_DESIGNATION..."
+                    className="flex-grow p-4 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs"
+                  />
+                  <button type="button" className="px-6 py-4 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors">
+                    CREATE SQUAD
+                  </button>
+                </form>
+              </div>
+
+              <div className="flex-grow border-2 border-[#1a1a1a] p-6 bg-[#050505] relative flex flex-col">
+                <h3 className="text-lg mb-6 border-b-2 border-[#1a1a1a] pb-4">ACTIVE SQUADS</h3>
+                <div className="flex-grow flex items-center justify-center">
+                  <p className="text-[10px] text-gray-600">NO ACTIVE SQUADS FOUND. INITIALIZE ONE ABOVE.</p>
+                </div>
+              </div>
             </div>
           )}
 
