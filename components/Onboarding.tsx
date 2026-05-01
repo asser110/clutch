@@ -83,6 +83,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete, theme }) =
           {
             id: session.user.id,
             nickname: nickname.trim(),
+            username: nickname.trim(), // Added to satisfy existing database constraint
             avatar_url: finalAvatarUrl,
           }
         ]);

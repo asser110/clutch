@@ -1,21 +1,29 @@
--- Run this in the Supabase SQL Editor to set up the new tables
+-- Run this in the Supabase SQL Editor to update existing tables
 
--- 1. Profiles Table
-CREATE TABLE profiles (
+-- 1. Profiles Table (Update existing)
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
-  nickname TEXT NOT NULL UNIQUE,
-  avatar_url TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
+-- Add our required columns (these commands are safe if the columns already exist)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS nickname TEXT UNIQUE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+-- Reset and apply policies
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone." ON profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile." ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile." ON profiles;
 
 CREATE POLICY "Public profiles are viewable by everyone." ON profiles FOR SELECT USING (true);
 CREATE POLICY "Users can insert their own profile." ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile." ON profiles FOR UPDATE USING (auth.uid() = id);
 
+
 -- 2. Friends Table
-CREATE TABLE friends (
+CREATE TABLE IF NOT EXISTS friends (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) NOT NULL,
   friend_id UUID REFERENCES profiles(id) NOT NULL,
@@ -25,6 +33,12 @@ CREATE TABLE friends (
 );
 
 ALTER TABLE friends ENABLE ROW LEVEL SECURITY;
+
+-- Reset and apply policies
+DROP POLICY IF EXISTS "Users can see their own friends." ON friends;
+DROP POLICY IF EXISTS "Users can insert friends." ON friends;
+DROP POLICY IF EXISTS "Users can update friends." ON friends;
+DROP POLICY IF EXISTS "Users can delete friends." ON friends;
 
 CREATE POLICY "Users can see their own friends." ON friends FOR SELECT USING (auth.uid() = user_id OR auth.uid() = friend_id);
 CREATE POLICY "Users can insert friends." ON friends FOR INSERT WITH CHECK (auth.uid() = user_id);
