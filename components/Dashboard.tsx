@@ -35,7 +35,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   const [activeChatFriend, setActiveChatFriend] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [recentMessages, setRecentMessages] = useState<any>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
 
   const fetchProfile = async () => {
     setLoadingProfile(true);
@@ -49,11 +52,31 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     
     const { data } = await supabase
       .from('friends')
-      .select('*, sender:user_id(nickname, avatar_url), receiver:friend_id(nickname, avatar_url)')
+      .select('*, sender:user_id(nickname, avatar_url, online_status), receiver:friend_id(nickname, avatar_url, online_status)')
       .or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`);
       
     if (data) {
       setFriends(data);
+      // Fetch recent messages for each friend
+      const messagesData: any = {};
+      for (const friend of data) {
+        if (friend.status === 'accepted') {
+          const isSender = friend.user_id === profile.id;
+          const friendId = isSender ? friend.friend_id : friend.user_id;
+          
+          const { data: msgs } = await supabase
+            .from('messages')
+            .select('*')
+            .or(`and(sender_id.eq.${profile.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${profile.id})`)
+            .order('created_at', { ascending: false })
+            .limit(1);
+            
+          if (msgs && msgs.length > 0) {
+            messagesData[friendId] = msgs[0];
+          }
+        }
+      }
+      setRecentMessages(messagesData);
     }
   };
 
@@ -90,20 +113,35 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   useEffect(() => {
     if (activeChatFriend && activeChannel === 'dms') {
       fetchMessages(activeChatFriend.id);
+      setMessageError(null);
       
-      // Subscribe to real-time messages
+      // Subscribe to real-time messages with proper filtering
       const subscription = supabase
-        .channel('public:messages')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-          setMessages(prev => [...prev, payload.new]);
-        })
+        .channel(`messages:${profile.id}:${activeChatFriend.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `or(and(sender_id.eq.${profile.id},receiver_id.eq.${activeChatFriend.id}),and(sender_id.eq.${activeChatFriend.id},receiver_id.eq.${profile.id}))`
+          },
+          (payload) => {
+            setMessages(prev => [...prev, payload.new]);
+            // Update recent messages
+            setRecentMessages(prev => ({
+              ...prev,
+              [payload.new.sender_id === profile.id ? payload.new.receiver_id : payload.new.sender_id]: payload.new
+            }));
+          }
+        )
         .subscribe();
 
       return () => {
         supabase.removeChannel(subscription);
       };
     }
-  }, [activeChatFriend, activeChannel]);
+  }, [activeChatFriend, activeChannel, profile?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -162,10 +200,26 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
 
     const msgContent = newMessage.trim();
     setNewMessage('');
+    setSendingMessage(true);
+    setMessageError(null);
 
-    await supabase.from('messages').insert([
-      { sender_id: profile.id, receiver_id: activeChatFriend.id, content: msgContent }
-    ]);
+    try {
+      const { error } = await supabase.from('messages').insert([
+        { sender_id: profile.id, receiver_id: activeChatFriend.id, content: msgContent }
+      ]);
+
+      if (error) {
+        setMessageError('Failed to send message. Please try again.');
+        setNewMessage(msgContent); // Restore message if sending fails
+        console.error('Message send error:', error);
+      }
+    } catch (err: any) {
+      setMessageError('Error sending message. Check your connection.');
+      setNewMessage(msgContent); // Restore message if sending fails
+      console.error('Send message exception:', err);
+    } finally {
+      setSendingMessage(false);
+    }
   };
 
   const initiateCall = (type: 'voice' | 'video') => {
@@ -453,17 +507,29 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                       )}
                       <div ref={messagesEndRef} />
                     </div>
-                    <form onSubmit={handleSendMessage} className="p-4 border-t-2 border-[#1a1a1a] flex gap-4">
-                      <input 
-                        type="text" 
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="ENTER_MESSAGE..."
-                        className="flex-grow p-4 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs"
-                      />
-                      <button type="submit" className="px-6 py-4 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors">
-                        SEND
-                      </button>
+                    <form onSubmit={handleSendMessage} className="p-4 border-t-2 border-[#1a1a1a] flex flex-col gap-4">
+                      {messageError && (
+                        <div className="text-red-500 text-[9px] p-2 border-l-2 border-red-500">
+                          {messageError}
+                        </div>
+                      )}
+                      <div className="flex gap-4">
+                        <input 
+                          type="text" 
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder="ENTER_MESSAGE..."
+                          disabled={sendingMessage}
+                          className="flex-grow p-4 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs disabled:opacity-50"
+                        />
+                        <button 
+                          type="submit" 
+                          disabled={sendingMessage || !newMessage.trim()}
+                          className="px-6 py-4 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {sendingMessage ? 'SENDING...' : 'SEND'}
+                        </button>
+                      </div>
                     </form>
                   </>
                 ) : (
