@@ -30,6 +30,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   const [friends, setFriends] = useState<any[]>([]);
   const [friendError, setFriendError] = useState<string | null>(null);
   const [friendSuccess, setFriendSuccess] = useState<string | null>(null);
+  const [friendTab, setFriendTab] = useState<'friends' | 'add'>('friends');
+  const [friendFilter, setFriendFilter] = useState<'all' | 'online' | 'offline'>('all');
+
+  const [nicknameInput, setNicknameInput] = useState('');
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [audioSettings, setAudioSettings] = useState({ microphone: true, headphones: true, systemSounds: true });
+  const [messagingSettings, setMessagingSettings] = useState({ notifications: true, readReceipts: true, autoScroll: true });
 
   // Chat State
   const [activeChatFriend, setActiveChatFriend] = useState<any>(null);
@@ -147,6 +155,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   }, [profile]);
 
   useEffect(() => {
+    if (profile) {
+      setNicknameInput(profile.nickname || '');
+    }
+  }, [profile]);
+
+  useEffect(() => {
     if (activeChatFriend && activeChannel === 'dms') {
       fetchMessages(activeChatFriend.id);
       setMessageError(null);
@@ -234,6 +248,34 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     fetchFriends();
   };
 
+  const handleUpdateSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile) return;
+    setSettingsSaving(true);
+    setSettingsMessage(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ nickname: nicknameInput.trim() })
+        .eq('id', profile.id)
+        .select()
+        .single();
+
+      if (error) {
+        setSettingsMessage('Failed to update settings.');
+      } else {
+        setProfile(data);
+        setSettingsMessage('Settings updated successfully.');
+      }
+    } catch (err) {
+      setSettingsMessage('Unexpected error while updating settings.');
+      console.error(err);
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChatFriend) return;
@@ -289,7 +331,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     { id: 'friends', name: 'FRIENDS', type: 'text' },
     { id: 'dms', name: 'DIRECT MESSAGES', type: 'text' },
     { id: 'groups', name: 'GROUPS', type: 'text' },
-    { id: 'settings', name: 'SETTINGS', type: 'text' },
   ];
 
   const bgColor = theme === 'blue' ? 'bg-[#050520]' : 'bg-black';
@@ -300,6 +341,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     const friendProfile = isSender ? f.receiver : f.sender;
     return { ...friendProfile, id: isSender ? f.friend_id : f.user_id }; // Return the actual friend's ID
   });
+
+  const filteredAcceptedFriends = acceptedFriends.filter(friend => {
+    if (friendFilter === 'all') return true;
+    return friendFilter === 'online' ? friend.online_status : !friend.online_status;
+  });
+
+  const pendingFriends = friends.filter(f => f.status === 'pending');
 
   return (
     <div className={`flex h-screen w-screen overflow-hidden ${bgColor} text-white font-press-start`}>
@@ -426,77 +474,129 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                 <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
                 
-                <h3 className="text-lg mb-4">ADD FRIEND</h3>
-                <form onSubmit={handleAddFriend} className="flex gap-4">
-                  <input 
-                    type="text" 
-                    value={friendInput}
-                    onChange={(e) => setFriendInput(e.target.value)}
-                    placeholder="ENTER_NICKNAME..."
-                    className="flex-grow p-4 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs"
-                  />
-                  <button type="submit" className="px-6 py-4 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors">
-                    SEND REQUEST
+                <div className="flex flex-wrap gap-2 mb-6">
+                  <button
+                    onClick={() => setFriendTab('friends')}
+                    className={`px-4 py-3 text-[10px] tracking-widest border-2 transition-colors ${friendTab === 'friends' ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
+                  >
+                    FRIENDS
                   </button>
-                </form>
-                {friendError && <p className="text-red-500 text-[10px] mt-3">{friendError}</p>}
-                {friendSuccess && <p className="text-green-500 text-[10px] mt-3">{friendSuccess}</p>}
+                  <button
+                    onClick={() => setFriendTab('add')}
+                    className={`px-4 py-3 text-[10px] tracking-widest border-2 transition-colors ${friendTab === 'add' ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
+                  >
+                    ADD FRIEND
+                  </button>
+                </div>
+
+                {friendTab === 'add' ? (
+                  <>
+                    <h3 className="text-lg mb-4">SEND FRIEND REQUEST</h3>
+                    <form onSubmit={handleAddFriend} className="flex gap-4 flex-wrap">
+                      <input 
+                        type="text" 
+                        value={friendInput}
+                        onChange={(e) => setFriendInput(e.target.value)}
+                        placeholder="ENTER_NICKNAME..."
+                        className="flex-grow min-w-[240px] p-4 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs"
+                      />
+                      <button type="submit" className="px-6 py-4 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors">
+                        SEND REQUEST
+                      </button>
+                    </form>
+                    {friendError && <p className="text-red-500 text-[10px] mt-3">{friendError}</p>}
+                    {friendSuccess && <p className="text-green-500 text-[10px] mt-3">{friendSuccess}</p>}
+                  </>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-[1fr_auto] items-center mb-6">
+                    <div>
+                      <h3 className="text-lg">ACTIVE CONNECTIONS</h3>
+                      <p className="text-[10px] text-gray-500">Filter by online status or review pending requests.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(['all', 'online', 'offline'] as const).map(option => (
+                        <button
+                          key={option}
+                          onClick={() => setFriendFilter(option)}
+                          className={`px-4 py-2 text-[10px] tracking-widest border-2 transition-colors ${friendFilter === option ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
+                        >
+                          {option.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex-grow overflow-y-auto no-scrollbar border-2 border-[#1a1a1a] bg-[#050505] p-6 relative">
                 <h3 className="text-lg mb-6 border-b-2 border-[#1a1a1a] pb-4">NETWORK CONNECTIONS</h3>
                 
-                {friends.length === 0 ? (
-                  <p className="text-[10px] text-gray-500 text-center py-10">NO CONNECTIONS FOUND.</p>
+                {filteredAcceptedFriends.length === 0 && pendingFriends.length === 0 ? (
+                  <div className="text-[10px] text-gray-500 text-center py-10">NO CONNECTIONS FOUND.</div>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    {friends.map(friend => {
-                      const isSender = friend.user_id === profile.id;
-                      const otherUser = isSender ? friend.receiver : friend.sender;
-                      
-                      return (
-                        <div key={friend.id} className="flex items-center justify-between border-2 border-[#1a1a1a] p-4 hover:border-[#333] transition-colors">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 border-2 border-[#333] p-1">
-                              <img src={otherUser.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-sm mb-1">{otherUser.nickname}</span>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-[8px] ${otherUser.online_status ? 'text-green-500' : 'text-gray-500'}`}>
-                                  {otherUser.online_status ? 'ONLINE' : 'OFFLINE'}
-                                </span>
-                                <span className={`text-[8px] ${friend.status === 'accepted' ? 'text-green-500' : 'text-yellow-500'}`}>
-                                  STATUS: {friend.status.toUpperCase()}
+                    {filteredAcceptedFriends.length > 0 ? (
+                      <div className="space-y-4">
+                        {filteredAcceptedFriends.map(friend => (
+                          <div key={friend.id} className="flex items-center justify-between border-2 border-[#1a1a1a] p-4 hover:border-[#333] transition-colors">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 border-2 border-[#333] p-1">
+                                <img src={friend.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-sm mb-1">{friend.nickname}</span>
+                                <span className={`text-[8px] ${friend.online_status ? 'text-green-500' : 'text-gray-500'}`}>
+                                  {friend.online_status ? 'ONLINE' : 'OFFLINE'}
                                 </span>
                               </div>
                             </div>
+                            <button 
+                              onClick={() => { setActiveChannel('dms'); setActiveChatFriend(friend); }}
+                              className="px-4 py-2 border-2 border-white text-white hover:bg-white hover:text-black transition-colors text-[10px]"
+                            >
+                              TRANSMIT
+                            </button>
                           </div>
-                          
-                          <div className="flex items-center gap-4 text-[10px]">
-                            {friend.status === 'pending' && !isSender && (
-                              <button 
-                                onClick={() => handleAcceptFriend(friend.id)}
-                                className="px-4 py-2 bg-green-900 border-2 border-green-500 text-green-400 hover:bg-green-500 hover:text-black transition-colors"
-                              >
-                                ACCEPT
-                              </button>
-                            )}
-                            {friend.status === 'pending' && isSender && (
-                              <span className="text-gray-500">PENDING...</span>
-                            )}
-                            {friend.status === 'accepted' && (
-                              <button 
-                                onClick={() => { setActiveChannel('dms'); setActiveChatFriend({...otherUser, id: isSender ? friend.friend_id : friend.user_id}); }}
-                                className="px-4 py-2 border-2 border-white text-white hover:bg-white hover:text-black transition-colors"
-                              >
-                                TRANSMIT
-                              </button>
-                            )}
-                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-gray-500">NO CONNECTIONS MATCH THIS FILTER.</div>
+                    )}
+
+                    {pendingFriends.length > 0 && (
+                      <div className="mt-6 border-t border-[#1a1a1a] pt-6">
+                        <h4 className="text-sm mb-3">PENDING REQUESTS</h4>
+                        <div className="space-y-4">
+                          {pendingFriends.map(friend => {
+                            const isSender = friend.user_id === profile.id;
+                            const otherUser = isSender ? friend.receiver : friend.sender;
+                            return (
+                              <div key={friend.id} className="flex items-center justify-between border-2 border-[#1a1a1a] p-4 hover:border-[#333] transition-colors">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-12 h-12 border-2 border-[#333] p-1">
+                                    <img src={otherUser.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                                  </div>
+                                  <div>
+                                    <span className="text-sm mb-1 block">{otherUser.nickname}</span>
+                                    <span className="text-[8px] text-yellow-500">PENDING</span>
+                                  </div>
+                                </div>
+                                {!isSender ? (
+                                  <button 
+                                    onClick={() => handleAcceptFriend(friend.id)}
+                                    className="px-4 py-2 bg-green-900 border-2 border-green-500 text-green-400 hover:bg-green-500 hover:text-black transition-colors text-[10px]"
+                                  >
+                                    ACCEPT
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-gray-500">REQUEST SENT</span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -631,28 +731,71 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
                 
                 <h2 className="text-2xl tracking-tighter border-b-2 border-[#1a1a1a] pb-4">SYSTEM CONFIGURATION</h2>
-                
-                <div className="flex gap-8 items-start">
-                  <div className="w-32 h-32 border-4 border-white p-1 bg-[#111]">
-                    <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="border-2 border-[#1a1a1a] p-6 bg-[#111]">
+                    <h3 className="text-lg mb-4">AUDIO SETTINGS</h3>
+                    <div className="space-y-3 text-[10px]">
+                      {['microphone', 'headphones', 'systemSounds'].map((key) => {
+                        const label = key === 'microphone' ? 'MICROPHONE' : key === 'headphones' ? 'HEADPHONES' : 'SYSTEM SOUNDS';
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setAudioSettings(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))}
+                            className={`w-full text-left px-4 py-3 border-2 transition-colors ${audioSettings[key as keyof typeof audioSettings] ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
+                          >
+                            {label}: {audioSettings[key as keyof typeof audioSettings] ? 'ON' : 'OFF'}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-4">
-                    <div>
-                      <span className="text-[10px] text-gray-500 block mb-1">CALLSIGN</span>
-                      <span className="text-xl">{profile.nickname}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-gray-500 block mb-1">NETWORK ID</span>
-                      <span className="text-xs text-gray-400">{profile.id}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-gray-500 block mb-1">SECURITY CLEARANCE</span>
-                      <span className="text-xs text-green-500">LEVEL 8 (IRON FORTRESS)</span>
+
+                  <div className="border-2 border-[#1a1a1a] p-6 bg-[#111]">
+                    <h3 className="text-lg mb-4">MESSAGING SETTINGS</h3>
+                    <div className="space-y-3 text-[10px]">
+                      {['notifications', 'readReceipts', 'autoScroll'].map((key) => {
+                        const label = key === 'notifications' ? 'NOTIFICATIONS' : key === 'readReceipts' ? 'READ RECEIPTS' : 'AUTO-SCROLL';
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setMessagingSettings(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))}
+                            className={`w-full text-left px-4 py-3 border-2 transition-colors ${messagingSettings[key as keyof typeof messagingSettings] ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
+                          >
+                            {label}: {messagingSettings[key as keyof typeof messagingSettings] ? 'ENABLED' : 'DISABLED'}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-8 border-t-2 border-[#1a1a1a] pt-8">
+                <div className="border-2 border-[#1a1a1a] p-6 bg-[#111]">
+                  <h3 className="text-lg mb-4">PROFILE & NICKNAME</h3>
+                  <form onSubmit={handleUpdateSettings} className="flex flex-col gap-4">
+                    <label className="text-[10px] text-gray-400 uppercase tracking-[3px]">CHANGE CALLSIGN</label>
+                    <input
+                      type="text"
+                      value={nicknameInput}
+                      onChange={(e) => setNicknameInput(e.target.value)}
+                      className="p-4 bg-[#050505] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs"
+                    />
+                    <button
+                      type="submit"
+                      disabled={settingsSaving || !nicknameInput.trim()}
+                      className="w-full px-6 py-4 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {settingsSaving ? 'UPDATING...' : 'SAVE CALLSIGN'}
+                    </button>
+                    {settingsMessage && (
+                      <p className="text-[10px] text-green-500">{settingsMessage}</p>
+                    )}
+                  </form>
+                </div>
+
+                <div className="mt-4 border-t-2 border-[#1a1a1a] pt-6">
                   <h3 className="text-lg mb-4 text-red-500">DANGER ZONE</h3>
                   <button onClick={handleLogout} className="px-6 py-4 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-black transition-colors text-xs">
                     TERMINATE SESSION (LOG OUT)
