@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
+-- Enable real-time for messages table
+ALTER TABLE messages REPLICA IDENTITY FULL;
+
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
 -- Users can only see messages they sent or received

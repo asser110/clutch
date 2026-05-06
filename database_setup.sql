@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- Add our required columns (these commands are safe if the columns already exist)
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS nickname TEXT UNIQUE;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS online_status BOOLEAN DEFAULT false;
+
+-- Enable real-time for profiles table
+ALTER TABLE profiles REPLICA IDENTITY FULL;
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 

@@ -107,6 +107,42 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   useEffect(() => {
     if (profile) {
       fetchFriends();
+      // Set online status to true
+      supabase.from('profiles').update({ online_status: true }).eq('id', profile.id);
+      
+      // Subscribe to profile changes for online status updates
+      const profileSubscription = supabase
+        .channel('profiles')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles'
+          },
+          (payload) => {
+            // Update friends list when a friend's online status changes
+            setFriends(prev => prev.map(friend => {
+              const isSender = friend.user_id === profile.id;
+              const friendId = isSender ? friend.friend_id : friend.user_id;
+              if (friendId === payload.new.id) {
+                const updatedFriend = { ...friend };
+                if (isSender) {
+                  updatedFriend.receiver = { ...updatedFriend.receiver, ...payload.new };
+                } else {
+                  updatedFriend.sender = { ...updatedFriend.sender, ...payload.new };
+                }
+                return updatedFriend;
+              }
+              return friend;
+            }));
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(profileSubscription);
+      };
     }
   }, [profile]);
 
@@ -148,6 +184,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   }, [messages]);
 
   const handleLogout = async () => {
+    // Set online status to false before logging out
+    if (profile) {
+      await supabase.from('profiles').update({ online_status: false }).eq('id', profile.id);
+    }
     await supabase.auth.signOut();
   };
 
@@ -204,14 +244,20 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     setMessageError(null);
 
     try {
-      const { error } = await supabase.from('messages').insert([
+      const { data, error } = await supabase.from('messages').insert([
         { sender_id: profile.id, receiver_id: activeChatFriend.id, content: msgContent }
-      ]);
+      ]).select();
 
       if (error) {
         setMessageError('Failed to send message. Please try again.');
         setNewMessage(msgContent); // Restore message if sending fails
         console.error('Message send error:', error);
+      } else if (data && data.length > 0) {
+        setMessages(prev => [...prev, data[0]]);
+        setRecentMessages(prev => ({
+          ...prev,
+          [activeChatFriend.id]: data[0]
+        }));
       }
     } catch (err: any) {
       setMessageError('Error sending message. Check your connection.');
@@ -416,9 +462,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                             </div>
                             <div className="flex flex-col">
                               <span className="text-sm mb-1">{otherUser.nickname}</span>
-                              <span className={`text-[8px] ${friend.status === 'accepted' ? 'text-green-500' : 'text-yellow-500'}`}>
-                                STATUS: {friend.status.toUpperCase()}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[8px] ${otherUser.online_status ? 'text-green-500' : 'text-gray-500'}`}>
+                                  {otherUser.online_status ? 'ONLINE' : 'OFFLINE'}
+                                </span>
+                                <span className={`text-[8px] ${friend.status === 'accepted' ? 'text-green-500' : 'text-yellow-500'}`}>
+                                  STATUS: {friend.status.toUpperCase()}
+                                </span>
+                              </div>
                             </div>
                           </div>
                           
@@ -467,8 +518,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                         onClick={() => setActiveChatFriend(friend)}
                         className={`flex items-center gap-3 p-2 border-2 transition-colors w-full text-left ${activeChatFriend?.nickname === friend.nickname ? 'border-white bg-[#1a1a1a]' : 'border-transparent hover:border-[#333]'}`}
                       >
-                        <div className="w-8 h-8 border border-[#333]">
-                          <img src={friend.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                        <div className="relative">
+                          <div className="w-8 h-8 border border-[#333]">
+                            <img src={friend.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                          </div>
+                          <div className={`absolute -bottom-1 -right-1 w-3 h-3 border border-[#050505] rounded-full ${friend.online_status ? 'bg-green-500' : 'bg-gray-500'}`}></div>
                         </div>
                         <span className="text-xs truncate">{friend.nickname}</span>
                       </button>
