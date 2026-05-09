@@ -103,10 +103,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete, theme }) =
     }
   };
 
-  const bgColor = theme === 'blue' ? 'bg-[#050520]' : 'bg-black';
+  const bgColor = theme === 'blue' ? 'bg-slate-50' : 'bg-black';
+  const panelStyles = theme === 'blue' ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#050505] border-[#1a1a1a] text-white';
 
   return (
-    <div className={`font-press-start ${bgColor} text-white h-screen w-screen overflow-hidden flex flex-col items-center justify-center p-4 relative`}>
+    <div className={`font-press-start ${bgColor} ${theme === 'blue' ? 'text-slate-900' : 'text-white'} h-screen w-screen overflow-hidden flex flex-col items-center justify-center p-4 relative`}>
       <style>{`
         @keyframes scanline {
           0% { transform: translateY(-100%); }
@@ -127,7 +128,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete, theme }) =
       
       <div className="scanline" />
 
-      <div className="max-w-md w-full border-2 border-[#1a1a1a] p-8 bg-[#050505] relative z-10 min-h-[400px] flex flex-col justify-between">
+      <div className={`max-w-md w-full border-2 p-8 relative z-10 min-h-[400px] flex flex-col justify-between ${panelStyles}`}>
         <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
         <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
 

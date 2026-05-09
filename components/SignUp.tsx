@@ -154,7 +154,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
 
   if (isValid === null) {
     return (
-      <div className={`font-press-start ${theme === 'blue' ? 'bg-[#0a0a40]' : 'bg-black'} text-white h-screen w-screen flex items-center justify-center`}>
+      <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen flex items-center justify-center`}>
         <p>VALIDATING INVITE...</p>
       </div>
     );
@@ -162,7 +162,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
 
   if (!isValid) {
     return (
-      <div className={`font-press-start ${theme === 'blue' ? 'bg-[#0a0a40]' : 'bg-black'} text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center`}>
+      <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen flex flex-col items-center justify-center p-4 text-center`}>
         <h1 className="text-5xl mb-8">INVALID INVITE</h1>
         <p className="text-gray-400 mb-8">{isExpired ? 'This invite link has expired.' : 'This invite link is not valid.'}</p>
         <button onClick={onNavigateHome} className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none">
@@ -174,7 +174,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
 
   if (isSignedUp) {
     return (
-      <div className={`font-press-start ${theme === 'blue' ? 'bg-[#0a0a40]' : 'bg-black'} text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center`}>
+      <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen flex flex-col items-center justify-center p-4 text-center`}>
         <h1 className="text-5xl mb-8">SUCCESS!</h1>
         <p className="text-gray-400 mb-8">Account created. Please go back and log in with your new credentials.</p>
 
@@ -186,7 +186,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
   }
 
   return (
-    <div className={`font-press-start ${theme === 'blue' ? 'bg-[#0a0a40]' : 'bg-black'} text-white h-screen w-screen overflow-y-auto flex flex-col items-center justify-center p-4`}>
+    <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen overflow-y-auto flex flex-col items-center justify-center p-4`}>
       <style>{`
         @keyframes signup-fade-in {
           from { opacity: 0; }

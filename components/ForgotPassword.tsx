@@ -88,7 +88,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
   };
 
   return (
-    <div className={`font-press-start ${theme === 'blue' ? 'bg-[#0a0a40]' : 'bg-black'} text-white min-h-screen w-screen relative flex flex-col items-center justify-center p-4 transition-colors duration-500 overflow-y-auto`}>
+    <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} min-h-screen w-screen relative flex flex-col items-center justify-center p-4 transition-colors duration-500 overflow-y-auto`}>
       <style>{`
         @keyframes fade-in {
           from { opacity: 0; }

@@ -307,7 +307,7 @@ const Landing: React.FC<LandingProps> = ({
   }
 
   return (
-    <div className={`font-press-start ${theme === 'blue' ? 'bg-[#0a0a40]' : 'bg-black'} text-white min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative transition-colors duration-500`}>
+    <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative transition-colors duration-500`}>
 
       <div className="absolute top-6 left-6 md:top-8 md:left-8">
         {!brandingAnimationComplete ? (
@@ -371,10 +371,10 @@ const Landing: React.FC<LandingProps> = ({
       <div className="absolute bottom-8 right-8 flex items-center gap-4">
         <button
           onClick={toggleTheme}
-          className="text-xs text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none border border-gray-700 px-2 py-1 rounded"
+          className="text-xs text-gray-600 hover:text-black transition-colors duration-200 focus:outline-none border border-gray-300 px-2 py-1 rounded"
           title="Toggle Theme"
         >
-          {theme === 'blue' ? 'CLASSIC' : 'MODERN'}
+          {theme === 'blue' ? 'LIGHT' : 'DARK'}
         </button>
         <button onClick={() => setShowAdminModal(true)} className="text-sm text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
           ADMIN

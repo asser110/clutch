@@ -46,7 +46,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onBack, theme = 'blue' })
     };
 
     return (
-        <div className={`font-press-start ${theme === 'blue' ? 'bg-[#0a0a40]' : 'bg-black'} text-white h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4 transition-colors duration-500`}>
+        <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4 transition-colors duration-500`}>
             <style>{`
         @keyframes reset-fade-in {
           from { opacity: 0; }

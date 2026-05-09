@@ -98,7 +98,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
   // Forgot Password is now handled by the parent routing to the dedicated page
 
   return (
-    <div className="font-press-start bg-black text-white h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
+    <div className="font-press-start bg-white text-black h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
       <style>{`
         @keyframes login-fade-in {
           from { opacity: 0; }
@@ -108,7 +108,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
       `}</style>
       <div className="w-full max-w-sm text-center animate-login-fade-in">
         <header className="absolute top-8 left-8 text-lg">
-          <button onClick={onBack} className="text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
+          <button onClick={onBack} className="text-gray-600 hover:text-black transition-colors duration-200 focus:outline-none">
             &lt;&lt; BACK
           </button>
         </header>
@@ -123,7 +123,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
+                className="w-full p-3 bg-gray-100 border-2 border-gray-300 text-black focus:outline-none focus:border-black caret-black placeholder-gray-400"
                 placeholder="ENTER EMAIL..."
                 required
               />
@@ -136,7 +136,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
                   type={passwordVisible ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full p-3 pr-12 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
+                  className="w-full p-3 pr-12 bg-gray-100 border-2 border-gray-300 text-black focus:outline-none focus:border-black caret-black placeholder-gray-400"
                   placeholder="ENTER PASSWORD..."
                   required
                 />
@@ -149,7 +149,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
               <input
                 id="remember-me"
                 type="checkbox"
-                className="appearance-none h-5 w-5 cursor-pointer bg-gray-900 border-2 border-gray-600 checked:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white"
+                className="appearance-none h-5 w-5 cursor-pointer bg-white border-2 border-gray-300 checked:bg-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-black"
               />
               <label htmlFor="remember-me" className="text-sm cursor-pointer select-none">REMEMBER ME</label>
             </div>
@@ -157,7 +157,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
               <button
                 type="button"
                 onClick={onForgotPassword}
-                className="text-[10px] text-gray-500 hover:text-white transition-colors focus:outline-none"
+                className="text-[10px] text-gray-600 hover:text-black transition-colors focus:outline-none"
               >
                 FORGOT PASSWORD?
               </button>
@@ -186,7 +186,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
                 maxLength={8}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white text-center tracking-[0.8rem] text-xl placeholder-gray-700"
+                className="w-full p-3 bg-gray-100 border-2 border-gray-300 text-black focus:outline-none focus:border-black caret-black text-center tracking-[0.8rem] text-xl placeholder-gray-400"
                 placeholder="00000000"
                 required
               />
