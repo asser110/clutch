@@ -41,12 +41,26 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
 
   // Chat State
   const [activeChatFriend, setActiveChatFriend] = useState<any>(null);
+  const [activeGroup, setActiveGroup] = useState<string | null>(null);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [groupNameInput, setGroupNameInput] = useState('');
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [recentMessages, setRecentMessages] = useState<any>({});
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedVoiceUrl, setRecordedVoiceUrl] = useState<string | null>(null);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [isVoiceCallActive, setIsVoiceCallActive] = useState(false);
+  const [isVideoCallActive, setIsVideoCallActive] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
+
+  const activeGroupDetails = groups.find(group => group.id === activeGroup) || null;
 
   const fetchProfile = async () => {
     setLoadingProfile(true);
@@ -197,6 +211,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    if (videoRef.current && localStream && isVideoCallActive) {
+      videoRef.current.srcObject = localStream;
+      videoRef.current.play().catch(() => null);
+    }
+  }, [localStream, isVideoCallActive]);
+
   const handleLogout = async () => {
     // Set online status to false before logging out
     if (profile) {
@@ -310,9 +331,117 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     }
   };
 
-  const initiateCall = (type: 'voice' | 'video') => {
-    // Placeholder for WebRTC call logic
-    alert(`Initializing ${type.toUpperCase()} CONNECTION protocols. WebRTC module required.`);
+  const createGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!groupNameInput.trim()) return;
+    const newGroup = {
+      id: `${Date.now()}`,
+      name: groupNameInput.trim(),
+      members: [profile.id],
+      createdAt: new Date().toISOString()
+    };
+    setGroups(prev => [...prev, newGroup]);
+    setGroupNameInput('');
+    setIsCreatingGroup(false);
+    setActiveChannel('dms');
+    setActiveGroup(newGroup.id);
+    setActiveChatFriend(null);
+  };
+
+  const stopLocalStream = () => {
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+    }
+    setLocalStream(null);
+    setIsVoiceCallActive(false);
+    setIsVideoCallActive(false);
+  };
+
+  const initiateCall = async (type: 'voice' | 'video') => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMessageError('Media devices are not supported by this browser.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        ...(type === 'video' ? { video: true } : {})
+      });
+      setLocalStream(stream);
+      setIsVoiceCallActive(type === 'voice');
+      setIsVideoCallActive(type === 'video');
+      setMessageError(null);
+    } catch (err: any) {
+      setMessageError(`Failed to start ${type} chat. Allow camera / microphone access.`);
+      console.error(err);
+    }
+  };
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setRecordingError('Microphone access is not available in this browser.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        setRecordedVoiceUrl(url);
+        stream.getTracks().forEach(track => track.stop());
+        setIsRecording(false);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordingError(null);
+    } catch (err: any) {
+      setRecordingError('Unable to access microphone. Please check permissions.');
+      console.error(err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    } else {
+      setIsRecording(false);
+    }
+  };
+
+  const sendVoiceNote = async () => {
+    if (!recordedVoiceUrl || !activeChatFriend) {
+      setMessageError('Record a voice note first before sending.');
+      return;
+    }
+
+    const { data, error } = await supabase.from('messages').insert([
+      { sender_id: profile.id, receiver_id: activeChatFriend.id, content: '[VOICE NOTE SENT]' }
+    ]).select();
+
+    if (error) {
+      setMessageError('Failed to send voice note.');
+      console.error(error);
+    } else if (data && data.length > 0) {
+      setMessages(prev => [...prev, data[0]]);
+      setRecentMessages(prev => ({
+        ...prev,
+        [activeChatFriend.id]: data[0]
+      }));
+      setRecordedVoiceUrl(null);
+    }
   };
 
   if (loadingProfile) {
@@ -437,11 +566,17 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
           <div className="flex items-center gap-3">
             <HashIcon />
             <span className="text-sm tracking-[4px] uppercase">
-              {activeChannel === 'dms' && activeChatFriend ? `COMM: ${activeChatFriend.nickname}` : activeChannel}
+              {activeChannel === 'dms'
+                ? activeGroupDetails
+                  ? `GROUP: ${activeGroupDetails.name}`
+                  : activeChatFriend
+                    ? `COMM: ${activeChatFriend.nickname}`
+                    : 'DIRECT MESSAGES'
+                : activeChannel}
             </span>
           </div>
           
-          {activeChannel === 'dms' && activeChatFriend && (
+          {activeChannel === 'dms' && (
             <div className="flex items-center gap-4 text-gray-400">
               <button onClick={() => initiateCall('voice')} className="hover:text-white transition-colors flex items-center gap-2 text-[10px]">
                 <HeadphoneIcon /> VOICE LINK
@@ -449,6 +584,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
               <button onClick={() => initiateCall('video')} className="hover:text-white transition-colors flex items-center gap-2 text-[10px]">
                 <UserIcon /> VIDEO LINK
               </button>
+              {localStream && (
+                <button onClick={stopLocalStream} className="hover:text-white transition-colors text-[10px] border border-[#333] px-3 py-2">
+                  END CALL
+                </button>
+              )}
             </div>
           )}
 
@@ -605,29 +745,92 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
 
           {activeChannel === 'dms' && (
             <div className="w-full h-full flex gap-6 relative z-10">
-              {/* Friends List Sidebar */}
-              <div className="w-64 border-2 border-[#1a1a1a] bg-[#050505] p-4 flex flex-col">
-                <h3 className="text-[10px] text-gray-500 mb-4 tracking-widest">ACTIVE LINKS</h3>
+              {/* Friends + Groups Sidebar */}
+              <div className="w-80 border-2 border-[#1a1a1a] bg-[#050505] p-4 flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-[10px] text-gray-500 tracking-widest">DIRECT MESSAGES</h3>
+                    <p className="text-[8px] text-gray-600">Groups and friends appear here.</p>
+                  </div>
+                  <button
+                    onClick={() => setIsCreatingGroup(prev => !prev)}
+                    className="flex items-center gap-2 text-[10px] border-2 border-transparent hover:border-[#333] px-3 py-2"
+                  >
+                    <PlusIcon /> GROUP
+                  </button>
+                </div>
+                {isCreatingGroup && (
+                  <form onSubmit={createGroup} className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={groupNameInput}
+                      onChange={(e) => setGroupNameInput(e.target.value)}
+                      placeholder="NEW GROUP NAME"
+                      className="flex-grow p-3 bg-[#111] border-2 border-[#333] text-white text-xs focus:outline-none focus:border-white"
+                    />
+                    <button type="submit" className="px-3 py-3 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors">
+                      CREATE
+                    </button>
+                  </form>
+                )}
+
                 <div className="flex-grow overflow-y-auto no-scrollbar flex flex-col gap-2">
-                  {acceptedFriends.length === 0 ? (
-                    <p className="text-[8px] text-gray-600">NO ACTIVE CONNECTIONS.</p>
-                  ) : (
-                    acceptedFriends.map(friend => (
-                      <button 
-                        key={friend.nickname}
-                        onClick={() => setActiveChatFriend(friend)}
-                        className={`flex items-center gap-3 p-2 border-2 transition-colors w-full text-left ${activeChatFriend?.nickname === friend.nickname ? 'border-white bg-[#1a1a1a]' : 'border-transparent hover:border-[#333]'}`}
-                      >
-                        <div className="relative">
-                          <div className="w-8 h-8 border border-[#333]">
-                            <img src={friend.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                  {groups.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-[8px] uppercase text-gray-500 tracking-[3px]">Groups</div>
+                      {groups.map(group => (
+                        <button
+                          key={group.id}
+                          onClick={() => {
+                            setActiveGroup(group.id);
+                            setActiveChatFriend(null);
+                          }}
+                          className={`flex items-center justify-between gap-3 p-3 border-2 transition-colors w-full text-left ${activeGroup === group.id ? 'border-white bg-[#1a1a1a]' : 'border-transparent hover:border-[#333]'}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-[#111] border border-[#333] flex items-center justify-center text-[10px] uppercase">
+                              G
+                            </div>
+                            <div className="flex flex-col text-left">
+                              <span className="text-xs truncate">{group.name}</span>
+                              <span className="text-[8px] text-gray-500 uppercase">GROUP</span>
+                            </div>
                           </div>
-                          <div className={`absolute -bottom-1 -right-1 w-3 h-3 border border-[#050505] rounded-full ${friend.online_status ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-                        </div>
-                        <span className="text-xs truncate">{friend.nickname}</span>
-                      </button>
-                    ))
+                        </button>
+                      ))}
+                    </div>
                   )}
+
+                  <div className="space-y-2">
+                    <div className="text-[8px] uppercase text-gray-500 tracking-[3px]">Contacts</div>
+                    {acceptedFriends.length === 0 ? (
+                      <p className="text-[8px] text-gray-600">NO ACTIVE CONNECTIONS.</p>
+                    ) : (
+                      acceptedFriends.map(friend => (
+                        <button
+                          key={friend.nickname}
+                          onClick={() => {
+                            setActiveChatFriend(friend);
+                            setActiveGroup(null);
+                          }}
+                          className={`flex items-center justify-between gap-3 p-3 border-2 transition-colors w-full text-left ${activeChatFriend?.nickname === friend.nickname ? 'border-white bg-[#1a1a1a]' : 'border-transparent hover:border-[#333]'}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <div className="w-9 h-9 border border-[#333]">
+                                <img src={friend.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                              </div>
+                              <div className={`absolute -bottom-1 -right-1 w-3 h-3 border border-[#050505] rounded-full ${friend.online_status ? 'bg-green-500' : 'bg-gray-500'}`} />
+                            </div>
+                            <div className="flex flex-col text-left">
+                              <span className="text-xs truncate">{friend.nickname}</span>
+                              <span className="text-[8px] text-gray-500 uppercase">DM</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -636,9 +839,26 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                 <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
                 <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
                 
-                {activeChatFriend ? (
+                {activeGroupDetails ? (
                   <>
                     <div className="flex-grow overflow-y-auto p-6 no-scrollbar flex flex-col gap-4">
+                      <div className="h-full flex flex-col items-center justify-center text-gray-600">
+                        <p className="text-[10px] mb-2">GROUP CHANNEL READY</p>
+                        <p className="text-xs text-white">{activeGroupDetails.name} is assembled.</p>
+                        <p className="text-[10px] mt-4 text-gray-500">Use the group list to switch between squads in the DMs tab.</p>
+                      </div>
+                    </div>
+                  </>
+                ) : activeChatFriend ? (
+                  <>
+                    <div className="flex-grow overflow-y-auto p-6 no-scrollbar flex flex-col gap-4">
+                      {localStream && isVideoCallActive && (
+                        <div className="w-full border-2 border-[#333] p-3 bg-[#080808]">
+                          <p className="text-[10px] text-gray-400 mb-2">VIDEO CHANNEL ACTIVE</p>
+                          <video ref={videoRef} className="w-full h-64 bg-black" autoPlay muted playsInline />
+                        </div>
+                      )}
+
                       {messages.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-600">
                           <p className="text-[10px] mb-2">COMMUNICATION LINK ESTABLISHED</p>
@@ -684,6 +904,27 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                           {sendingMessage ? 'SENDING...' : 'SEND'}
                         </button>
                       </div>
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <button
+                          type="button"
+                          onClick={isRecording ? stopRecording : startRecording}
+                          className={`px-4 py-3 text-[10px] border-2 transition-colors ${isRecording ? 'bg-red-500 text-black border-red-500' : 'bg-white text-black hover:bg-gray-200'}`}
+                        >
+                          {isRecording ? 'STOP RECORDING' : 'RECORD VOICE'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={sendVoiceNote}
+                          disabled={!recordedVoiceUrl}
+                          className="px-4 py-3 text-[10px] border-2 bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          SEND VOICE NOTE
+                        </button>
+                        {recordedVoiceUrl && (
+                          <audio controls src={recordedVoiceUrl} className="w-full" />
+                        )}
+                      </div>
+                      {recordingError && <p className="text-red-500 text-[9px]">{recordingError}</p>}
                     </form>
                   </>
                 ) : (
