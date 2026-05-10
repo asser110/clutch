@@ -36,8 +36,20 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   const [nicknameInput, setNicknameInput] = useState('');
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const [audioSettings, setAudioSettings] = useState({ microphone: true, headphones: true, systemSounds: true });
-  const [messagingSettings, setMessagingSettings] = useState({ notifications: true, readReceipts: true, autoScroll: true });
+  const [settingsTab, setSettingsTab] = useState<'my-account' | 'voice-video' | 'notifications' | 'privacy' | 'appearance'>('my-account');
+  const [audioSettings, setAudioSettings] = useState({ microphone: true, headphones: true, systemSounds: true, inputVolume: 100, outputVolume: 100, ringtone: true });
+  const [messagingSettings, setMessagingSettings] = useState({ notifications: true, readReceipts: true, autoScroll: true, compactMode: false });
+  const [privacySettings, setPrivacySettings] = useState({ showOnlineStatus: true, allowDMs: true, showActivity: false });
+  const [appearanceSettings, setAppearanceSettings] = useState({ theme: 'dark', fontSize: 'medium' });
+  const [notificationSettings, setNotificationSettings] = useState({ desktopNotifications: true, soundNotifications: true, mentionOnly: false });
+  const [voiceSettings, setVoiceSettings] = useState({ inputDevice: 'default', outputDevice: 'default', echoCancellation: true, noiseSuppression: true });
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(false);
+  const [callType, setCallType] = useState<'voice' | 'video' | null>(null);
+  const [isCallRinging, setIsCallRinging] = useState(false);
+  const [isCallConnected, setIsCallConnected] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const ringtoneOscRef = useRef<OscillatorNode | null>(null);
 
   // Chat State
   const [activeChatFriend, setActiveChatFriend] = useState<any>(null);
@@ -355,6 +367,51 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     setLocalStream(null);
     setIsVoiceCallActive(false);
     setIsVideoCallActive(false);
+    setIsCallConnected(false);
+    setCallType(null);
+    stopRingtone();
+  };
+
+  const playRingtone = () => {
+    if (!audioSettings.ringtone || !window.AudioContext) return;
+    try {
+      const audioCtx = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = audioCtx;
+      const oscillator = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 440;
+      gain.gain.value = 0.2;
+      oscillator.connect(gain);
+      gain.connect(audioCtx.destination);
+      oscillator.start();
+      ringtoneOscRef.current = oscillator;
+    } catch (err) {
+      console.error('Failed to start ringtone', err);
+    }
+  };
+
+  const stopRingtone = () => {
+    if (ringtoneOscRef.current) {
+      ringtoneOscRef.current.stop();
+      ringtoneOscRef.current.disconnect();
+      ringtoneOscRef.current = null;
+    }
+  };
+
+  const acceptCall = () => {
+    setIsCallRinging(false);
+    setIsCallConnected(true);
+    setIsVoiceCallActive(callType === 'voice');
+    setIsVideoCallActive(callType === 'video');
+    stopRingtone();
+  };
+
+  const declineCall = () => {
+    setIsCallRinging(false);
+    setCallType(null);
+    stopRingtone();
+    stopLocalStream();
   };
 
   const initiateCall = async (type: 'voice' | 'video') => {
@@ -369,9 +426,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
         ...(type === 'video' ? { video: true } : {})
       });
       setLocalStream(stream);
-      setIsVoiceCallActive(type === 'voice');
-      setIsVideoCallActive(type === 'video');
+      setIsMuted(false);
+      setIsVideoMuted(false);
       setMessageError(null);
+      setCallType(type);
+      setIsCallRinging(true);
+      setIsCallConnected(false);
+      playRingtone();
     } catch (err: any) {
       setMessageError(`Failed to start ${type} chat. Allow camera / microphone access.`);
       console.error(err);
@@ -852,10 +913,90 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                 ) : activeChatFriend ? (
                   <>
                     <div className="flex-grow overflow-y-auto p-6 no-scrollbar flex flex-col gap-4">
-                      {localStream && isVideoCallActive && (
-                        <div className="w-full border-2 border-[#333] p-3 bg-[#080808]">
-                          <p className="text-[10px] text-gray-400 mb-2">VIDEO CHANNEL ACTIVE</p>
-                          <video ref={videoRef} className="w-full h-64 bg-black" autoPlay muted playsInline />
+                      {localStream && isCallRinging && (
+                        <div className="w-full border-2 border-[#333] p-4 bg-[#080808] relative">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
+                              <div>
+                                <span className="text-[10px] text-gray-400 uppercase tracking-widest">CALLING {activeChatFriend.nickname}</span>
+                                <p className="text-xs text-white mt-1">{callType === 'video' ? 'VIDEO CALL' : 'VOICE CALL'} · RINGING</p>
+                              </div>
+                            </div>
+                            <button onClick={stopLocalStream} className="text-red-500 hover:text-red-400 transition-colors">
+                              <CloseIcon />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-center gap-4 pb-4">
+                            <button
+                              type="button"
+                              onClick={stopLocalStream}
+                              className="px-5 py-3 rounded-full bg-red-500 border-2 border-red-500 text-white hover:bg-red-600 transition-colors text-[10px] uppercase tracking-[2px]"
+                            >
+                              Cancel Call
+                            </button>
+                            <button
+                              type="button"
+                              onClick={acceptCall}
+                              className="px-5 py-3 rounded-full bg-white border-2 border-white text-black hover:bg-gray-200 transition-colors text-[10px] uppercase tracking-[2px]"
+                            >
+                              Connect
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 text-[10px] text-gray-400">
+                            <div className="p-3 border border-[#333] rounded">Microphone: {voiceSettings.echoCancellation ? 'On' : 'Off'}</div>
+                            <div className="p-3 border border-[#333] rounded">Noise Suppression: {voiceSettings.noiseSuppression ? 'On' : 'Off'}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {localStream && (isCallConnected || isVoiceCallActive || isVideoCallActive) && (
+                        <div className="w-full border-2 border-[#333] p-4 bg-[#080808] relative">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                              <span className="text-[10px] text-gray-400 uppercase tracking-widest">
+                                {(isVideoCallActive || callType === 'video') ? 'VIDEO CALL' : 'VOICE CALL'} WITH {activeChatFriend.nickname}
+                              </span>
+                            </div>
+                            <button onClick={stopLocalStream} className="text-red-500 hover:text-red-400 transition-colors">
+                              <CloseIcon />
+                            </button>
+                          </div>
+
+                          {isVideoCallActive && (
+                            <div className="relative mb-4">
+                              <video ref={videoRef} className="w-full h-48 bg-black rounded border border-[#333]" autoPlay muted playsInline />
+                              <div className="absolute bottom-2 right-2 w-20 h-20 border-2 border-white rounded">
+                                <video className="w-full h-full object-cover rounded" autoPlay muted playsInline />
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-center gap-4">
+                            <button
+                              onClick={() => setIsMuted(!isMuted)}
+                              className={`p-3 rounded-full border-2 transition-colors ${isMuted ? 'bg-red-500 border-red-500 text-white' : 'bg-[#1a1a1a] border-[#333] text-gray-400 hover:text-white'}`}
+                            >
+                              <MicIcon />
+                            </button>
+                            {isVideoCallActive && (
+                              <button
+                                onClick={() => setIsVideoMuted(!isVideoMuted)}
+                                className={`p-3 rounded-full border-2 transition-colors ${isVideoMuted ? 'bg-red-500 border-red-500 text-white' : 'bg-[#1a1a1a] border-[#333] text-gray-400 hover:text-white'}`}
+                              >
+                                <UserIcon />
+                              </button>
+                            )}
+                            <button
+                              onClick={stopLocalStream}
+                              className="p-3 rounded-full bg-red-500 border-2 border-red-500 text-white hover:bg-red-600 transition-colors"
+                            >
+                              <CloseIcon />
+                            </button>
+                          </div>
                         </div>
                       )}
 
@@ -966,81 +1107,253 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
           )}
 
           {activeChannel === 'settings' && (
-            <div className="max-w-4xl w-full h-full flex flex-col relative z-10">
-              <div className="border-2 border-[#1a1a1a] p-8 bg-[#050505] relative flex flex-col gap-8">
-                <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
-                <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
-                
-                <h2 className="text-2xl tracking-tighter border-b-2 border-[#1a1a1a] pb-4">SYSTEM CONFIGURATION</h2>
-
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="border-2 border-[#1a1a1a] p-6 bg-[#111]">
-                    <h3 className="text-lg mb-4">AUDIO SETTINGS</h3>
-                    <div className="space-y-3 text-[10px]">
-                      {['microphone', 'headphones', 'systemSounds'].map((key) => {
-                        const label = key === 'microphone' ? 'MICROPHONE' : key === 'headphones' ? 'HEADPHONES' : 'SYSTEM SOUNDS';
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => setAudioSettings(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))}
-                            className={`w-full text-left px-4 py-3 border-2 transition-colors ${audioSettings[key as keyof typeof audioSettings] ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
-                          >
-                            {label}: {audioSettings[key as keyof typeof audioSettings] ? 'ON' : 'OFF'}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="border-2 border-[#1a1a1a] p-6 bg-[#111]">
-                    <h3 className="text-lg mb-4">MESSAGING SETTINGS</h3>
-                    <div className="space-y-3 text-[10px]">
-                      {['notifications', 'readReceipts', 'autoScroll'].map((key) => {
-                        const label = key === 'notifications' ? 'NOTIFICATIONS' : key === 'readReceipts' ? 'READ RECEIPTS' : 'AUTO-SCROLL';
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => setMessagingSettings(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))}
-                            className={`w-full text-left px-4 py-3 border-2 transition-colors ${messagingSettings[key as keyof typeof messagingSettings] ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
-                          >
-                            {label}: {messagingSettings[key as keyof typeof messagingSettings] ? 'ENABLED' : 'DISABLED'}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-2 border-[#1a1a1a] p-6 bg-[#111]">
-                  <h3 className="text-lg mb-4">PROFILE & NICKNAME</h3>
-                  <form onSubmit={handleUpdateSettings} className="flex flex-col gap-4">
-                    <label className="text-[10px] text-gray-400 uppercase tracking-[3px]">CHANGE CALLSIGN</label>
-                    <input
-                      type="text"
-                      value={nicknameInput}
-                      onChange={(e) => setNicknameInput(e.target.value)}
-                      className="p-4 bg-[#050505] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs"
-                    />
+            <div className="w-full h-full flex relative z-10">
+              {/* Settings Sidebar */}
+              <div className="w-64 border-r-2 border-[#1a1a1a] bg-[#0a0a0a] p-4">
+                <h3 className="text-[10px] text-gray-500 mb-6 tracking-widest">SETTINGS</h3>
+                <div className="space-y-2">
+                  {[
+                    { id: 'my-account', label: 'My Account' },
+                    { id: 'voice-video', label: 'Voice & Video' },
+                    { id: 'notifications', label: 'Notifications' },
+                    { id: 'privacy', label: 'Privacy & Safety' },
+                    { id: 'appearance', label: 'Appearance' },
+                  ].map(item => (
                     <button
-                      type="submit"
-                      disabled={settingsSaving || !nicknameInput.trim()}
-                      className="w-full px-6 py-4 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSettingsTab(item.id as typeof settingsTab)}
+                      className={`w-full text-left px-3 py-3 text-[10px] uppercase tracking-[2px] transition-colors rounded ${settingsTab === item.id ? 'bg-white text-black border border-white' : 'border border-transparent text-gray-400 hover:border-[#333] hover:text-white'}`}
                     >
-                      {settingsSaving ? 'UPDATING...' : 'SAVE CALLSIGN'}
+                      {item.label}
                     </button>
-                    {settingsMessage && (
-                      <p className="text-[10px] text-green-500">{settingsMessage}</p>
-                    )}
-                  </form>
+                  ))}
                 </div>
+              </div>
 
-                <div className="mt-4 border-t-2 border-[#1a1a1a] pt-6">
-                  <h3 className="text-lg mb-4 text-red-500">DANGER ZONE</h3>
-                  <button onClick={handleLogout} className="px-6 py-4 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-black transition-colors text-xs">
-                    TERMINATE SESSION (LOG OUT)
-                  </button>
+              {/* Settings Content */}
+              <div className="flex-grow p-8 overflow-y-auto">
+                <div className="max-w-4xl">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <h2 className="text-2xl tracking-tighter">SYSTEM CONFIGURATION</h2>
+                      <p className="text-[10px] text-gray-500 mt-2">Adjust account, voice, notifications, privacy, and appearance preferences.</p>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-[3px] text-gray-500">{settingsTab.replace('-', ' ').toUpperCase()}</span>
+                  </div>
+
+                  {settingsTab === 'my-account' && (
+                    <>
+                      <div className="border-2 border-[#1a1a1a] p-6 bg-[#111] mb-6">
+                        <h3 className="text-lg mb-4">MY ACCOUNT</h3>
+                        <form onSubmit={handleUpdateSettings} className="flex flex-col gap-4">
+                          <div className="flex flex-wrap items-center gap-4">
+                            <div className="w-16 h-16 border-2 border-white p-1">
+                              <img src={profile.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-[220px]">
+                              <label className="text-[10px] text-gray-400 uppercase tracking-[3px] mb-2 block">CALLSIGN</label>
+                              <input
+                                type="text"
+                                value={nicknameInput}
+                                onChange={(e) => setNicknameInput(e.target.value)}
+                                className="w-full p-3 bg-[#050505] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={settingsSaving || !nicknameInput.trim()}
+                            className="w-full px-6 py-3 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {settingsSaving ? 'UPDATING...' : 'SAVE CALLSIGN'}
+                          </button>
+                          {settingsMessage && (
+                            <p className="text-[10px] text-green-500">{settingsMessage}</p>
+                          )}
+                        </form>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="border-2 border-[#1a1a1a] p-6 bg-[#111]">
+                          <h3 className="text-lg mb-4">ACCOUNT DETAILS</h3>
+                          <p className="text-[10px] text-gray-500 mb-2">User ID</p>
+                          <p className="text-xs break-all text-white">{profile.id}</p>
+                        </div>
+                        <div className="border-2 border-[#1a1a1a] p-6 bg-[#111]">
+                          <h3 className="text-lg mb-4">PRESENCE</h3>
+                          <p className="text-[10px] text-gray-500 mb-2">Online Status</p>
+                          <span className={`px-2 py-1 text-[10px] uppercase tracking-[2px] ${profile.online_status ? 'bg-green-500 text-black' : 'bg-gray-500 text-white'}`}>{profile.online_status ? 'ONLINE' : 'OFFLINE'}</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {settingsTab === 'voice-video' && (
+                    <div className="border-2 border-[#1a1a1a] p-6 bg-[#111] mb-6">
+                      <h3 className="text-lg mb-4">VOICE & VIDEO</h3>
+                      <div className="space-y-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div>
+                            <label className="text-[10px] text-gray-400 uppercase tracking-[3px] block mb-2">INPUT DEVICE</label>
+                            <select className="w-full p-3 bg-[#050505] border-2 border-[#333] text-white text-xs">
+                              <option>Default Microphone</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-400 uppercase tracking-[3px] block mb-2">OUTPUT DEVICE</label>
+                            <select className="w-full p-3 bg-[#050505] border-2 border-[#333] text-white text-xs">
+                              <option>Default Speaker</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div>
+                            <label className="text-[10px] text-gray-400 uppercase tracking-[3px] block mb-2">INPUT VOLUME</label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={audioSettings.inputVolume}
+                              onChange={(e) => setAudioSettings(prev => ({ ...prev, inputVolume: parseInt(e.target.value) }))}
+                              className="w-full"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-400 uppercase tracking-[3px] block mb-2">OUTPUT VOLUME</label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={audioSettings.outputVolume}
+                              onChange={(e) => setAudioSettings(prev => ({ ...prev, outputVolume: parseInt(e.target.value) }))}
+                              className="w-full"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          {[
+                            { key: 'echoCancellation', label: 'Echo Cancellation', state: voiceSettings.echoCancellation },
+                            { key: 'noiseSuppression', label: 'Noise Suppression', state: voiceSettings.noiseSuppression },
+                            { key: 'ringtone', label: 'Call Ringtone', state: audioSettings.ringtone }
+                          ].map(({ key, label, state }) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => {
+                                if (key === 'ringtone') {
+                                  setAudioSettings(prev => ({ ...prev, ringtone: !prev.ringtone }));
+                                } else {
+                                  setVoiceSettings(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
+                                }
+                              }}
+                              className={`w-full text-left px-4 py-3 border-2 transition-colors text-[10px] ${state ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
+                            >
+                              {label}: {state ? 'ON' : 'OFF'}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="mt-6 flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            onClick={playRingtone}
+                            className="px-5 py-3 bg-white text-black text-[10px] uppercase tracking-[2px] hover:bg-gray-200 transition-colors"
+                          >
+                            Preview Ringtone
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAudioSettings(prev => ({ ...prev, ringtone: !prev.ringtone }))}
+                            className="px-5 py-3 border-2 border-[#333] text-gray-400 hover:text-white hover:border-white text-[10px] uppercase tracking-[2px] transition-colors"
+                          >
+                            {audioSettings.ringtone ? 'Disable' : 'Enable'} Ringtone
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {settingsTab === 'notifications' && (
+                    <div className="border-2 border-[#1a1a1a] p-6 bg-[#111] mb-6">
+                      <h3 className="text-lg mb-4">NOTIFICATIONS</h3>
+                      <div className="space-y-3">
+                        {[
+                          { key: 'desktopNotifications', label: 'Desktop Notifications' },
+                          { key: 'soundNotifications', label: 'Sound Notifications' },
+                          { key: 'mentionOnly', label: 'Mentions Only' }
+                        ].map(({ key, label }) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setNotificationSettings(prev => ({ ...prev, [key]: !prev[key as keyof typeof notificationSettings] }))}
+                            className={`w-full text-left px-4 py-3 border-2 transition-colors text-[10px] ${notificationSettings[key as keyof typeof notificationSettings] ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
+                          >
+                            {label}: {notificationSettings[key as keyof typeof notificationSettings] ? 'ENABLED' : 'DISABLED'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {settingsTab === 'privacy' && (
+                    <div className="border-2 border-[#1a1a1a] p-6 bg-[#111] mb-6">
+                      <h3 className="text-lg mb-4">PRIVACY & SAFETY</h3>
+                      <div className="space-y-3">
+                        {[
+                          { key: 'showOnlineStatus', label: 'Show Online Status' },
+                          { key: 'allowDMs', label: 'Allow Direct Messages' },
+                          { key: 'showActivity', label: 'Show Activity Status' }
+                        ].map(({ key, label }) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setPrivacySettings(prev => ({ ...prev, [key]: !prev[key as keyof typeof privacySettings] }))}
+                            className={`w-full text-left px-4 py-3 border-2 transition-colors text-[10px] ${privacySettings[key as keyof typeof privacySettings] ? 'bg-white text-black border-white' : 'border-transparent text-gray-400 hover:border-[#333]'}`}
+                          >
+                            {label}: {privacySettings[key as keyof typeof privacySettings] ? 'ENABLED' : 'DISABLED'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {settingsTab === 'appearance' && (
+                    <div className="border-2 border-[#1a1a1a] p-6 bg-[#111] mb-6">
+                      <h3 className="text-lg mb-4">APPEARANCE</h3>
+                      <div className="space-y-4">
+                        <button
+                          type="button"
+                          onClick={() => setAppearanceSettings(prev => ({ ...prev, theme: prev.theme === 'dark' ? 'light' : 'dark' }))}
+                          className="w-full text-left px-4 py-3 border-2 text-[10px] border-[#333] bg-[#050505] hover:border-white hover:text-white transition-colors"
+                        >
+                          Theme: {appearanceSettings.theme === 'dark' ? 'Dark' : 'Light'}
+                        </button>
+                        <div>
+                          <label className="text-[10px] text-gray-400 uppercase tracking-[3px] block mb-2">FONT SIZE</label>
+                          <select
+                            value={appearanceSettings.fontSize}
+                            onChange={(e) => setAppearanceSettings(prev => ({ ...prev, fontSize: e.target.value }))}
+                            className="w-full p-3 bg-[#050505] border-2 border-[#333] text-white text-xs"
+                          >
+                            <option value="small">Small</option>
+                            <option value="medium">Medium</option>
+                            <option value="large">Large</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Danger Zone */}
+                  <div className="border-2 border-red-500 p-6 bg-[#111]">
+                    <h3 className="text-lg mb-4 text-red-500">DANGER ZONE</h3>
+                    <button onClick={handleLogout} className="px-6 py-4 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-black transition-colors text-xs">
+                      TERMINATE SESSION (LOG OUT)
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
