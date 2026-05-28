@@ -879,20 +879,51 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       return;
     }
 
-    const { data, error } = await supabase.from('messages').insert([
-      { sender_id: profile.id, receiver_id: activeChatFriend.id, content: '[VOICE NOTE SENT]' }
-    ]).select();
+    try {
+      // Show sending status
+      setSendingMessage(true);
+      
+      // Convert blob URL to blob and upload to Supabase Storage
+      const response = await fetch(recordedVoiceUrl);
+      const blob = await response.blob();
+      const filePath = `${profile.id}/${Date.now()}-voice.webm`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('voice-notes')
+        .upload(filePath, blob, { contentType: 'audio/webm' });
+      
+      if (uploadError) {
+        console.error('Failed to upload voice note:', uploadError);
+        setMessageError('Failed to upload voice note.');
+        setSendingMessage(false);
+        return;
+      }
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('voice-notes')
+        .getPublicUrl(filePath);
 
-    if (error) {
+      const { data, error } = await supabase.from('messages').insert([
+        { sender_id: profile.id, receiver_id: activeChatFriend.id, content: `[voice]${publicUrl}[/voice]` }
+      ]).select();
+
+      if (error) {
+        setMessageError('Failed to send voice note.');
+        console.error(error);
+      } else if (data && data.length > 0) {
+        setMessages(prev => [...prev, data[0]]);
+        setRecentMessages(prev => ({
+          ...prev,
+          [activeChatFriend.id]: data[0]
+        }));
+        if (recordedVoiceUrl) URL.revokeObjectURL(recordedVoiceUrl);
+        setRecordedVoiceUrl(null);
+      }
+    } catch (err) {
+      console.error('Error sending voice note:', err);
       setMessageError('Failed to send voice note.');
-      console.error(error);
-    } else if (data && data.length > 0) {
-      setMessages(prev => [...prev, data[0]]);
-      setRecentMessages(prev => ({
-        ...prev,
-        [activeChatFriend.id]: data[0]
-      }));
-      setRecordedVoiceUrl(null);
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -929,6 +960,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   });
 
   const pendingFriends = friends.filter(f => f.status === 'pending');
+  const voiceNoteRegex = /^\[voice\](.+)\[\/voice\]$/;
 
   return (
     <div className={`flex h-screen w-screen overflow-hidden ${bgColor} text-white font-press-start`}>
@@ -953,6 +985,18 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           color: black;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        @keyframes messageIn {
+          0% { opacity: 0; transform: translateY(8px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .msg-enter {
+          animation: messageIn 0.2s ease-out both;
+        }
+        input:focus, button:focus { outline: none; }
+        /* Better audio controls for dark theme */
+        audio::-webkit-media-controls-panel { background: #1a1a1a; }
+        audio::-webkit-media-controls-current-time-display { color: #999; }
+        audio::-webkit-media-controls-time-remaining-display { color: #999; }
       `}</style>
 
       <div className="scanline" />
@@ -1312,13 +1356,73 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                       ) : (
                         messages.map((msg, idx) => {
                           const isMine = msg.sender_id === profile.id;
+                          const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                          const isFirstInGroup = !prevMsg || prevMsg.sender_id !== msg.sender_id;
+                          const voiceMatch = msg.content?.match(voiceNoteRegex);
+                          const isVoiceNote = !!voiceMatch;
+                          const voiceUrl = voiceMatch ? voiceMatch[1] : null;
+                          const msgDate = new Date(msg.created_at);
+                          const prevDate = prevMsg ? new Date(prevMsg.created_at) : null;
+                          const showDateSeparator = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
+                          
+                          const formatDateSeparator = (date: Date) => {
+                            const now = new Date();
+                            const yesterday = new Date(now);
+                            yesterday.setDate(yesterday.getDate() - 1);
+                            if (date.toDateString() === now.toDateString()) return 'TODAY';
+                            if (date.toDateString() === yesterday.toDateString()) return 'YESTERDAY';
+                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+                          };
+                          
                           return (
-                            <div key={idx} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                              <span className="text-[8px] text-gray-600 mb-1">
-                                {isMine ? 'YOU' : activeChatFriend.nickname} [{new Date(msg.created_at).toLocaleTimeString()}]
-                              </span>
-                              <div className={`p-3 max-w-[80%] text-xs leading-relaxed ${isMine ? 'bg-white text-black' : 'border-2 border-[#333] text-white'}`}>
-                                {msg.content}
+                            <div key={idx} className="flex flex-col">
+                              {showDateSeparator && (
+                                <div className="flex items-center gap-3 my-4">
+                                  <div className="flex-grow h-px bg-[#1a1a1a]" />
+                                  <span className="text-[8px] text-gray-600 uppercase tracking-[3px] shrink-0">{formatDateSeparator(msgDate)}</span>
+                                  <div className="flex-grow h-px bg-[#1a1a1a]" />
+                                </div>
+                              )}
+                              <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} group hover:bg-white/[0.02] px-2 py-1 rounded transition-colors ${idx === messages.length - 1 ? 'msg-enter' : ''}`}>
+                                {/* Avatar + Name row (only for first message in group) */}
+                                {isFirstInGroup && (
+                                  <div className={`flex items-center gap-2 mb-1 ${isMine ? 'flex-row-reverse' : ''}`}>
+                                    <div className="w-5 h-5 border border-[#333] overflow-hidden shrink-0">
+                                      <img src={isMine ? profile.avatar_url : activeChatFriend.avatar_url} alt="" className="w-full h-full object-cover" />
+                                    </div>
+                                    <span className="text-[9px] text-gray-400 uppercase tracking-wider">
+                                      {isMine ? 'YOU' : activeChatFriend.nickname}
+                                    </span>
+                                    <span className="text-[7px] text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      {msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                )}
+                                {/* Timestamp only on hover for grouped messages */}
+                                {!isFirstInGroup && (
+                                  <span className="text-[7px] text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity mb-0.5">
+                                    {msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                )}
+                                {/* Voice note player */}
+                                {isVoiceNote ? (
+                                  <div className={`max-w-[300px] ${isMine ? 'bg-white/5' : 'bg-[#111]'} border border-[#2a2a2a] rounded overflow-hidden`}>
+                                    <div className="flex items-center gap-2 px-3 py-2 bg-[#0a0a0a] border-b border-[#1a1a1a]">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                        <line x1="12" y1="19" x2="12" y2="23"/>
+                                        <line x1="8" y1="23" x2="16" y2="23"/>
+                                      </svg>
+                                      <span className="text-[8px] text-gray-500 uppercase tracking-wider">VOICE MESSAGE</span>
+                                    </div>
+                                    <audio controls src={voiceUrl!} className="h-9 w-full block" style={{ accentColor: '#fff' }} />
+                                  </div>
+                                ) : (
+                                  <div className={`px-3 py-2 max-w-[80%] text-xs leading-relaxed ${isMine ? 'bg-white text-black' : 'border border-[#333] text-white'} group-hover:brightness-110 transition-all`}>
+                                    {msg.content}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -1326,50 +1430,91 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                       )}
                       <div ref={messagesEndRef} />
                     </div>
-                    <form onSubmit={handleSendMessage} className="p-4 border-t-2 border-[#1a1a1a] flex flex-col gap-4">
+                    <form onSubmit={handleSendMessage} className="p-3 border-t-2 border-[#1a1a1a]">
                       {messageError && (
-                        <div className="text-red-500 text-[9px] p-2 border-l-2 border-red-500">
+                        <div className="text-red-500 text-[9px] p-2 mb-3 border-l-2 border-red-500 bg-red-500/5">
                           {messageError}
                         </div>
                       )}
-                      <div className="flex gap-4">
-                        <input 
-                          type="text" 
-                          value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
-                          placeholder="ENTER_MESSAGE..."
-                          disabled={sendingMessage}
-                          className="flex-grow p-4 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs disabled:opacity-50"
-                        />
+                      {/* Recording indicator bar */}
+                      {isRecording && (
+                        <div className="flex items-center gap-3 mb-3 px-3 py-2 bg-red-500/10 border border-red-500/30">
+                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                          <span className="text-[9px] text-red-400 uppercase tracking-wider">RECORDING...</span>
+                          <div className="flex-grow h-1 bg-[#333] rounded overflow-hidden">
+                            <div className="h-full bg-red-500 rounded animate-pulse" style={{ width: '60%' }} />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={stopRecording}
+                            className="px-3 py-1 text-[9px] bg-red-500 text-black hover:bg-red-400 transition-colors uppercase tracking-wider"
+                          >
+                            STOP
+                          </button>
+                        </div>
+                      )}
+                      {/* Recorded voice note preview */}
+                      {recordedVoiceUrl && !isRecording && (
+                        <div className="flex items-center gap-3 mb-3 px-3 py-2 bg-green-900/20 border border-green-500/30">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400 shrink-0">
+                            <path d="M9 18V5l12-2v13"/>
+                            <circle cx="6" cy="18" r="3"/>
+                            <circle cx="18" cy="16" r="3"/>
+                          </svg>
+                          <audio controls src={recordedVoiceUrl} className="h-7 flex-grow max-w-[200px]" style={{ accentColor: '#22c55e' }} />
+                          <button
+                            type="button"
+                            onClick={sendVoiceNote}
+                            className="px-3 py-1.5 text-[9px] bg-green-500 text-black hover:bg-green-400 transition-colors uppercase tracking-wider"
+                          >
+                            SEND
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (recordedVoiceUrl) URL.revokeObjectURL(recordedVoiceUrl);
+                              setRecordedVoiceUrl(null);
+                            }}
+                            className="px-3 py-1.5 text-[9px] border border-[#444] text-gray-400 hover:text-white hover:border-white transition-colors uppercase tracking-wider"
+                          >
+                            DISCARD
+                          </button>
+                        </div>
+                      )}
+                      {/* Input row */}
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-grow flex items-center gap-2 bg-[#111] border-2 border-[#333] focus-within:border-white transition-colors p-2">
+                          <button
+                            type="button"
+                            onClick={isRecording ? stopRecording : startRecording}
+                            className={`shrink-0 p-1.5 transition-colors ${isRecording ? 'text-red-400' : 'text-gray-500 hover:text-white'}`}
+                            title={isRecording ? 'Stop recording' : 'Record voice message'}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                              <line x1="12" y1="19" x2="12" y2="23"/>
+                              <line x1="8" y1="23" x2="16" y2="23"/>
+                            </svg>
+                          </button>
+                          <input 
+                            type="text" 
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            placeholder="ENTER_MESSAGE..."
+                            disabled={sendingMessage}
+                            className="flex-grow bg-transparent text-white text-xs placeholder-gray-600 focus:outline-none disabled:opacity-50 py-1"
+                          />
+                        </div>
                         <button 
                           type="submit" 
                           disabled={sendingMessage || !newMessage.trim()}
-                          className="px-6 py-4 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-4 py-2.5 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider"
                         >
                           {sendingMessage ? 'SENDING...' : 'SEND'}
                         </button>
                       </div>
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <button
-                          type="button"
-                          onClick={isRecording ? stopRecording : startRecording}
-                          className={`px-4 py-3 text-[10px] border-2 transition-colors ${isRecording ? 'bg-red-500 text-black border-red-500' : 'bg-white text-black hover:bg-gray-200'}`}
-                        >
-                          {isRecording ? 'STOP RECORDING' : 'RECORD VOICE'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={sendVoiceNote}
-                          disabled={!recordedVoiceUrl}
-                          className="px-4 py-3 text-[10px] border-2 bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          SEND VOICE NOTE
-                        </button>
-                        {recordedVoiceUrl && (
-                          <audio controls src={recordedVoiceUrl} className="w-full" />
-                        )}
-                      </div>
-                      {recordingError && <p className="text-red-500 text-[9px]">{recordingError}</p>}
+                      {recordingError && <p className="text-red-500 text-[9px] mt-2">{recordingError}</p>}
                     </form>
                   </>
                 ) : (
