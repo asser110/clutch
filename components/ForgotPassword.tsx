@@ -4,11 +4,10 @@ import { supabase } from '../lib/supabaseClient';
 
 interface ForgotPasswordProps {
   onBack: () => void;
-  theme?: 'blue' | 'black';
   initialView?: 'email' | 'password';
 }
 
-const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue', initialView = 'email' }) => {
+const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, initialView = 'email' }) => {
   const [view, setView] = useState<'email' | 'otp' | 'password'>(initialView);
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -88,7 +87,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
   };
 
   return (
-    <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} min-h-screen w-screen relative flex flex-col items-center justify-center p-4 transition-colors duration-500 overflow-y-auto`}>
+    <div className="font-press-start bg-black text-white min-h-screen w-screen relative flex flex-col items-center justify-center p-4 overflow-y-auto">
       <style>{`
         @keyframes fade-in {
           from { opacity: 0; }
@@ -129,7 +128,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
+                className="w-full p-3 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
                 placeholder="ENTER EMAIL..."
                 required
               />
@@ -157,7 +156,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
                 maxLength={8}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white text-center text-2xl tracking-[1em] placeholder:tracking-normal placeholder:text-sm placeholder:text-gray-500"
+                className="w-full p-3 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white caret-white text-center text-2xl tracking-[1em] placeholder:tracking-normal placeholder:text-sm placeholder:text-gray-500"
                 placeholder="--------"
                 required
               />
@@ -184,7 +183,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
                         type={passwordVisible ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full p-3 pr-12 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white"
+                        className="w-full p-3 pr-12 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white"
                         placeholder="ENTER NEW PASSWORD..."
                         required
                     />
@@ -201,7 +200,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'blue',
                         type={confirmPasswordVisible ? 'text' : 'password'}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full p-3 pr-12 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white"
+                        className="w-full p-3 pr-12 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white"
                         placeholder="CONFIRM NEW PASSWORD..."
                         required
                     />

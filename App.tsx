@@ -20,12 +20,6 @@ const App: React.FC = () => {
     }
     return 'landing';
   });
-  const [theme, setTheme] = useState<'blue' | 'black'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('clutch-theme') as 'blue' | 'black') || 'blue';
-    }
-    return 'blue';
-  });
   const [isSignedUp, setIsSignedUp] = useState(() => {
     if (typeof window !== 'undefined') {
       return sessionStorage.getItem('clutch-signup-success') === 'true';
@@ -40,12 +34,6 @@ const App: React.FC = () => {
     } else {
       sessionStorage.removeItem('clutch-signup-success');
     }
-  };
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'blue' ? 'black' : 'blue';
-    setTheme(newTheme);
-    localStorage.setItem('clutch-theme', newTheme);
   };
 
   useEffect(() => {
@@ -68,7 +56,7 @@ const App: React.FC = () => {
   }, []);
 
   if (loading) {
-    return <div className="bg-black h-screen w-screen"></div>; // Or a proper loading spinner
+    return <div className="bg-black h-screen w-screen"></div>;
   }
 
   // Prevent redirect to Dashboard if they are on login (2FA in progress) or password reset
@@ -81,7 +69,7 @@ const App: React.FC = () => {
   const isOnLoginPage = currentPage === 'login';
 
   if (session && !isSignedUp && !isResettingPassword && !isOnLoginPage) {
-    return <Dashboard session={session} theme={theme} />;
+    return <Dashboard session={session} />;
   }
 
   return (
@@ -90,8 +78,6 @@ const App: React.FC = () => {
       setCurrentPath={setCurrentPath}
       currentPage={currentPage}
       setCurrentPage={setCurrentPage}
-      theme={theme}
-      toggleTheme={toggleTheme}
       isSignedUp={isSignedUp}
       setIsSignedUp={handleSetIsSignedUp}
     />
@@ -103,8 +89,6 @@ interface LandingProps {
   setCurrentPath: (path: string) => void;
   currentPage: string;
   setCurrentPage: (page: string) => void;
-  theme: 'blue' | 'black';
-  toggleTheme: () => void;
   isSignedUp: boolean;
   setIsSignedUp: (val: boolean) => void;
 }
@@ -115,8 +99,6 @@ const Landing: React.FC<LandingProps> = ({
   setCurrentPath,
   currentPage,
   setCurrentPage,
-  theme,
-  toggleTheme,
   isSignedUp,
   setIsSignedUp
 }) => {
@@ -136,14 +118,13 @@ const Landing: React.FC<LandingProps> = ({
     return <SignUpComponent
       token={token}
       expires={expires}
-      theme={theme}
       onNavigateHome={handleNavigateHome}
       onSignUpSuccess={() => {
         sessionStorage.setItem('clutch-goto-login', 'true');
         window.history.pushState({}, '', '/');
         setCurrentPath('/');
         setCurrentPage('login');
-        setIsSignedUp(false); // Reset for next time
+        setIsSignedUp(false);
       }}
       isSignedUp={isSignedUp}
       setIsSignedUp={setIsSignedUp}
@@ -160,8 +141,7 @@ const Landing: React.FC<LandingProps> = ({
 
     return <ForgotPassword
       onBack={handleNavigateHome}
-      theme={theme}
-      initialView="password" // If they came via a magic link event
+      initialView="password"
     />;
   }
 
@@ -174,7 +154,6 @@ const Landing: React.FC<LandingProps> = ({
 
     return <ForgotPassword
       onBack={handleNavigateHome}
-      theme={theme}
       initialView="email"
     />;
   }
@@ -307,7 +286,7 @@ const Landing: React.FC<LandingProps> = ({
   }
 
   return (
-    <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative transition-colors duration-500`}>
+    <div className="font-press-start bg-black text-white min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative">
 
       <div className="absolute top-6 left-6 md:top-8 md:left-8">
         {!brandingAnimationComplete ? (
@@ -369,13 +348,6 @@ const Landing: React.FC<LandingProps> = ({
 
 
       <div className="absolute bottom-8 right-8 flex items-center gap-4">
-        <button
-          onClick={toggleTheme}
-          className="text-xs text-gray-600 hover:text-black transition-colors duration-200 focus:outline-none border border-gray-300 px-2 py-1 rounded"
-          title="Toggle Theme"
-        >
-          {theme === 'blue' ? 'LIGHT' : 'DARK'}
-        </button>
         <button onClick={() => setShowAdminModal(true)} className="text-sm text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
           ADMIN
         </button>

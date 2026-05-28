@@ -98,7 +98,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
   // Forgot Password is now handled by the parent routing to the dedicated page
 
   return (
-    <div className="font-press-start bg-white text-black h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
+    <div className="font-press-start bg-black text-white h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
       <style>{`
         @keyframes login-fade-in {
           from { opacity: 0; }
@@ -108,7 +108,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
       `}</style>
       <div className="w-full max-w-sm text-center animate-login-fade-in">
         <header className="absolute top-8 left-8 text-lg">
-          <button onClick={onBack} className="text-gray-600 hover:text-black transition-colors duration-200 focus:outline-none">
+          <button onClick={onBack} className="text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
             &lt;&lt; BACK
           </button>
         </header>
@@ -123,7 +123,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 bg-gray-100 border-2 border-gray-300 text-black focus:outline-none focus:border-black caret-black placeholder-gray-400"
+                className="w-full p-3 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
                 placeholder="ENTER EMAIL..."
                 required
               />
@@ -136,11 +136,11 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
                   type={passwordVisible ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full p-3 pr-12 bg-gray-100 border-2 border-gray-300 text-black focus:outline-none focus:border-black caret-black placeholder-gray-400"
+                  className="w-full p-3 pr-12 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
                   placeholder="ENTER PASSWORD..."
                   required
                 />
-                <button type="button" onClick={togglePasswordVisibility} className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 hover:text-white transition-colors duration-200 focus:outline-none">
+                <button type="button" onClick={togglePasswordVisibility} className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-500 hover:text-white transition-colors duration-200 focus:outline-none">
                   {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
@@ -149,15 +149,15 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
               <input
                 id="remember-me"
                 type="checkbox"
-                className="appearance-none h-5 w-5 cursor-pointer bg-white border-2 border-gray-300 checked:bg-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-black"
+                className="appearance-none h-5 w-5 cursor-pointer bg-[#111] border-2 border-[#333] checked:bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white"
               />
-              <label htmlFor="remember-me" className="text-sm cursor-pointer select-none">REMEMBER ME</label>
+              <label htmlFor="remember-me" className="text-sm text-gray-400 cursor-pointer select-none">REMEMBER ME</label>
             </div>
             <div className="text-left -mt-2">
               <button
                 type="button"
                 onClick={onForgotPassword}
-                className="text-[10px] text-gray-600 hover:text-black transition-colors focus:outline-none"
+                className="text-[10px] text-gray-500 hover:text-white transition-colors focus:outline-none"
               >
                 FORGOT PASSWORD?
               </button>
@@ -166,7 +166,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
             <button
               type="submit"
               disabled={loading}
-              className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
+              className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-600 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
             >
               {loading ? 'VERIFYING...' : 'ENTER'}
             </button>
@@ -186,7 +186,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
                 maxLength={8}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                className="w-full p-3 bg-gray-100 border-2 border-gray-300 text-black focus:outline-none focus:border-black caret-black text-center tracking-[0.8rem] text-xl placeholder-gray-400"
+                className="w-full p-3 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white caret-white text-center tracking-[0.8rem] text-xl placeholder-gray-500"
                 placeholder="00000000"
                 required
               />
@@ -196,7 +196,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onBack, onForgotPasswor
             <button
               type="submit"
               disabled={loading || success || otpCode.length < 6}
-              className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-400 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
+              className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-white disabled:bg-gray-600 disabled:shadow-none disabled:translate-x-0 disabled:translate-y-0"
             >
               {loading ? 'VERIFYING...' : 'VERIFY'}
             </button>

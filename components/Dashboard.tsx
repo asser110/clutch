@@ -13,13 +13,13 @@ import {
 } from './icons';
 import { supabase } from '../lib/supabaseClient';
 import Onboarding from './Onboarding';
+import CallOverlay from './CallOverlay';
 
 interface DashboardProps {
   session: Session;
-  theme: 'blue' | 'black';
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
+const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   const [profile, setProfile] = useState<any>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   
@@ -69,6 +69,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [incomingCall, setIncomingCall] = useState<any>(null);
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const incomingCallIdRef = useRef<string | null>(null);
+  const signalsCleanupRef = useRef<(() => void) | null>(null);
+  const activeCallIdRef = useRef<string | null>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
 
@@ -230,6 +238,105 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     }
   }, [localStream, isVideoCallActive]);
 
+  // Keep remote video element updated
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStreamRef.current) {
+      remoteVideoRef.current.srcObject = remoteStreamRef.current;
+      remoteVideoRef.current.play().catch(() => null);
+    }
+  });
+
+  // Subscribe to incoming calls via Supabase
+  useEffect(() => {
+    if (!profile) return;
+
+    const callsSub = supabase
+      .channel('incoming-calls')
+      .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'calls',
+          filter: 'callee_id=eq.' + profile.id
+        },
+        async (payload) => {
+          const call = payload.new as any;
+          if (call.status === 'ringing') {
+            if (isCallConnected || isVoiceCallActive || isVideoCallActive) {
+              await supabase.from('calls').update({ status: 'declined', ended_at: new Date().toISOString() }).eq('id', call.id);
+              return;
+            }
+            const { data: callerProfile } = await supabase
+              .from('profiles')
+              .select('id, nickname, avatar_url')
+              .eq('id', call.caller_id)
+              .single();
+            if (callerProfile) {
+              setIncomingCall({ ...call, caller: callerProfile });
+              incomingCallIdRef.current = call.id;
+              setCallType(call.call_type);
+              setIsCallRinging(true);
+              playRingtone();
+              setTimeout(() => {
+                setIncomingCall(prev => {
+                  if (prev && prev.id === call.id) { declineCall(); }
+                  return prev;
+                });
+              }, 30000);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    const statusSub = supabase
+      .channel('call-status')
+      .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'calls',
+          filter: 'callee_id=eq.' + profile.id
+        },
+        (payload) => {
+          const call = payload.new as any;
+          if ((call.status === 'declined' || call.status === 'ended') && incomingCallIdRef.current === call.id) {
+            setIsCallRinging(false);
+            setIncomingCall(null);
+            setCallType(null);
+            stopRingtone();
+            stopLocalStream();
+          }
+        }
+      )
+      .subscribe();
+
+    // Also subscribe to status updates where caller_id matches (so caller knows when callee declines/ends)
+    const callerStatusSub = supabase
+      .channel('caller-call-status')
+      .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'calls',
+          filter: 'caller_id=eq.' + profile.id
+        },
+        (payload) => {
+          const call = payload.new as any;
+          if ((call.status === 'declined' || call.status === 'ended') && activeCallIdRef.current === call.id) {
+            setIsCallRinging(false);
+            setIncomingCall(null);
+            stopRingtone();
+            stopLocalStream();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(callsSub);
+      supabase.removeChannel(statusSub);
+      supabase.removeChannel(callerStatusSub);
+    };
+  }, [profile?.id]);
+
   const handleLogout = async () => {
     // Set online status to false before logging out
     if (profile) {
@@ -361,6 +468,21 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   };
 
   const stopLocalStream = () => {
+    // Clean up signal subscription
+    if (signalsCleanupRef.current) {
+      signalsCleanupRef.current();
+      signalsCleanupRef.current = null;
+    }
+    // Clean up peer connection
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    // Clean up remote stream
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current.getTracks().forEach(track => track.stop());
+      remoteStreamRef.current = null;
+    }
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
     }
@@ -369,7 +491,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     setIsVideoCallActive(false);
     setIsCallConnected(false);
     setCallType(null);
+    setActiveCallId(null);
+    activeCallIdRef.current = null;
+    setIncomingCall(null);
     stopRingtone();
+    // Update call status in Supabase if there's an active call
+    if (activeCallId && profile) {
+      supabase.from('calls').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', activeCallId);
+    }
   };
 
   const playRingtone = () => {
@@ -381,11 +510,36 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
       const gain = audioCtx.createGain();
       oscillator.type = 'sine';
       oscillator.frequency.value = 440;
-      gain.gain.value = 0.2;
+      gain.gain.value = 0.3;
       oscillator.connect(gain);
       gain.connect(audioCtx.destination);
       oscillator.start();
       ringtoneOscRef.current = oscillator;
+      // Create a pulsing ringtone effect
+      const now = audioCtx.currentTime;
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.setValueAtTime(0.3, now + 0.15);
+      gain.gain.linearRampToValueAtTime(0, now + 0.2);
+      gain.gain.setValueAtTime(0, now + 0.4);
+      gain.gain.setValueAtTime(0.3, now + 0.5);
+      gain.gain.setValueAtTime(0.3, now + 0.65);
+      gain.gain.linearRampToValueAtTime(0, now + 0.7);
+      gain.gain.setValueAtTime(0, now + 0.9);
+      gain.gain.setValueAtTime(0.3, now + 1.0);
+      // Loop the pattern by scheduling again
+      const interval = setInterval(() => {
+        const t = audioCtx.currentTime;
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.linearRampToValueAtTime(0.3, t + 0.15);
+        gain.gain.linearRampToValueAtTime(0, t + 0.2);
+        gain.gain.setValueAtTime(0, t + 0.4);
+        gain.gain.setValueAtTime(0.3, t + 0.5);
+        gain.gain.linearRampToValueAtTime(0.3, t + 0.65);
+        gain.gain.linearRampToValueAtTime(0, t + 0.7);
+        gain.gain.setValueAtTime(0, t + 0.9);
+      }, 1000);
+      // Store interval on oscillator for cleanup
+      (oscillator as any)._ringInterval = interval;
     } catch (err) {
       console.error('Failed to start ringtone', err);
     }
@@ -393,23 +547,194 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
 
   const stopRingtone = () => {
     if (ringtoneOscRef.current) {
-      ringtoneOscRef.current.stop();
-      ringtoneOscRef.current.disconnect();
+      try {
+        // Clear the pulsing interval
+        if ((ringtoneOscRef.current as any)._ringInterval) {
+          clearInterval((ringtoneOscRef.current as any)._ringInterval);
+        }
+        ringtoneOscRef.current.stop();
+        ringtoneOscRef.current.disconnect();
+      } catch (e) { /* already stopped */ }
       ringtoneOscRef.current = null;
     }
   };
 
-  const acceptCall = () => {
-    setIsCallRinging(false);
-    setIsCallConnected(true);
-    setIsVoiceCallActive(callType === 'voice');
-    setIsVideoCallActive(callType === 'video');
-    stopRingtone();
+  // ========== WebRTC Helper Functions ==========
+
+  const setupPeerConnection = (callId: string, stream: MediaStream): RTCPeerConnection | null => {
+    try {
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+        ]
+      });
+
+      stream.getTracks().forEach(track => {
+        pc.addTrack(track, stream);
+      });
+
+      pc.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          remoteStreamRef.current = event.streams[0];
+          setLocalStream(prev => prev);
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = event.streams[0];
+          }
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+          stopLocalStream();
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          stopLocalStream();
+        }
+      };
+
+      peerConnectionRef.current = pc;
+      return pc;
+    } catch (err) {
+      console.error('Failed to create RTCPeerConnection:', err);
+      return null;
+    }
   };
 
-  const declineCall = () => {
+  const sendSignal = async (callId: string, type: 'offer' | 'answer' | 'ice-candidate', data: any) => {
+    try {
+      const signalData = data.toJSON ? data.toJSON() : data;
+      const { error } = await supabase.from('call_signals').insert({
+        call_id: callId,
+        sender_id: profile.id,
+        signal_type: type,
+        signal_data: signalData
+      });
+      if (error) console.error('Failed to send signal:', error);
+    } catch (err) {
+      console.error('Error sending signal:', err);
+    }
+  };
+
+  const setupSignalsSubscription = (callId: string, pc: RTCPeerConnection, isCaller: boolean, stream: MediaStream, call_type?: string) => {
+    const channel = supabase
+      .channel('call-signals-' + callId)
+      .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'call_signals',
+          filter: 'call_id=eq.' + callId
+        },
+        async (payload) => {
+          const signal = payload.new as any;
+          if (signal.sender_id === profile.id) return;
+          try {
+            if (signal.signal_type === 'answer' && isCaller) {
+              await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data));
+              setIsCallConnected(true);
+              setIsCallRinging(false);
+              setIsVoiceCallActive(call_type === 'voice');
+              setIsVideoCallActive(call_type === 'video');
+              stopRingtone();
+            } else if (signal.signal_type === 'offer' && !isCaller) {
+              await pc.setRemoteDescription(new RTCSessionDescription(signal.signal_data));
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              await sendSignal(callId, 'answer', pc.localDescription);
+              setIsCallConnected(true);
+              setIsCallRinging(false);
+              stopRingtone();
+            } else if (signal.signal_type === 'ice-candidate') {
+              const candidate = new RTCIceCandidate(signal.signal_data);
+              await pc.addIceCandidate(candidate);
+            }
+          } catch (err) {
+            console.error('Error processing signal:', err, signal);
+          }
+        }
+      )
+      .subscribe();
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendSignal(callId, 'ice-candidate', event.candidate);
+      }
+    };
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
+
+  const acceptCall = async () => {
+    if (!incomingCall || !navigator.mediaDevices?.getUserMedia) return;
+    
+    stopRingtone();
+    setIsCallRinging(false);
+    setIsCallConnected(true);
+    setCallType(incomingCall.call_type);
+    setActiveCallId(incomingCall.id);
+    activeCallIdRef.current = incomingCall.id;
+    
+    try {
+      // Get local media
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        ...(incomingCall.call_type === 'video' ? { video: true } : {})
+      });
+      setLocalStream(stream);
+      setIncomingCall(null);
+      
+      // Update call status to connected
+      await supabase.from('calls').update({ status: 'connected' }).eq('id', incomingCall.id);
+      
+      // Setup peer connection (callee side - will receive offer and send answer)
+      const pc = setupPeerConnection(incomingCall.id, stream);
+      if (!pc) return;
+      
+      // Subscribe to signals and wait for offer
+      signalsCleanupRef.current = setupSignalsSubscription(incomingCall.id, pc, false, stream, incomingCall.call_type);
+      
+      // Fetch existing offer (in case it was sent before we subscribed)
+      const { data: offers } = await supabase
+        .from('call_signals')
+        .select('*')
+        .eq('call_id', incomingCall.id)
+        .eq('signal_type', 'offer')
+        .order('created_at', { ascending: true });
+      
+      if (offers && offers.length > 0) {
+        const offer = offers[offers.length - 1];
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(offer.signal_data));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await sendSignal(incomingCall.id, 'answer', pc.localDescription);
+        } catch (e) {
+          console.error('Error processing existing offer:', e);
+        }
+      }
+      
+      setIsVoiceCallActive(incomingCall.call_type === 'voice');
+      setIsVideoCallActive(incomingCall.call_type === 'video');
+    } catch (err: any) {
+      console.error('Failed to accept call:', err);
+      stopLocalStream();
+    }
+  };
+
+  const declineCall = async () => {
+    if (incomingCall) {
+      // Notify the caller we declined
+      await supabase.from('calls').update({ status: 'declined', ended_at: new Date().toISOString() }).eq('id', incomingCall.id);
+    }
     setIsCallRinging(false);
     setCallType(null);
+    setIncomingCall(null);
     stopRingtone();
     stopLocalStream();
   };
@@ -417,6 +742,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   const initiateCall = async (type: 'voice' | 'video') => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setMessageError('Media devices are not supported by this browser.');
+      return;
+    }
+    if (!activeChatFriend) {
+      setMessageError('Select a friend to call first.');
       return;
     }
 
@@ -431,12 +760,74 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
       setMessageError(null);
       setCallType(type);
       setIsCallRinging(true);
-      setIsCallConnected(false);
+      
+      // Create call record in Supabase
+      const { data: callData, error: callError } = await supabase
+        .from('calls')
+        .insert({
+          caller_id: profile.id,
+          callee_id: activeChatFriend.id,
+          call_type: type,
+          status: 'ringing'
+        })
+        .select()
+        .single();
+      
+      if (callError || !callData) {
+        console.error('Failed to create call:', callError);
+        setMessageError('Failed to start call. Please try again.');
+        stopLocalStream();
+        return;
+      }
+      
+      setActiveCallId(callData.id);
+      activeCallIdRef.current = callData.id;
       playRingtone();
+      
+      // Create RTCPeerConnection (caller side)
+      const pc = setupPeerConnection(callData.id, stream);
+      if (!pc) {
+        stopLocalStream();
+        return;
+      }
+      
+      // Create and send SDP offer
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await sendSignal(callData.id, 'offer', pc.localDescription);
+        
+        // Subscribe to signals for answer and ICE candidates
+        signalsCleanupRef.current = setupSignalsSubscription(callData.id, pc, true, stream, type);
+      } catch (err) {
+        console.error('Failed to create offer:', err);
+        setMessageError('Failed to establish connection.');
+        stopLocalStream();
+      }
     } catch (err: any) {
       setMessageError(`Failed to start ${type} chat. Allow camera / microphone access.`);
       console.error(err);
     }
+  };
+
+  const toggleMute = () => {
+    if (localStream) {
+      const audioTracks = localStream.getAudioTracks();
+      audioTracks.forEach(track => {
+        track.enabled = isMuted;
+      });
+    }
+    setIsMuted(!isMuted);
+  };
+
+  const toggleVideoMute = () => {
+    if (localStream) {
+      const videoTracks = localStream.getVideoTracks();
+      videoTracks.forEach(track => {
+        track.enabled = isVideoMuted;
+      });
+    }
+    setIsVideoMuted(!isVideoMuted);
   };
 
   const startRecording = async () => {
@@ -514,7 +905,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
   }
 
   if (!profile) {
-    return <Onboarding session={session} onComplete={fetchProfile} theme={theme} />;
+    return <Onboarding session={session} onComplete={fetchProfile} />;
   }
 
   const channels = [
@@ -523,8 +914,8 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
     { id: 'groups', name: 'GROUPS', type: 'text' },
   ];
 
-  const bgColor = theme === 'blue' ? 'bg-[#050520]' : 'bg-black';
-  const sidebarColor = theme === 'blue' ? 'bg-[#0a0a30]' : 'bg-[#0a0a0a]';
+  const bgColor = 'bg-black';
+  const sidebarColor = 'bg-[#0a0a0a]';
 
   const acceptedFriends = friends.filter(f => f.status === 'accepted').map(f => {
     const isSender = f.user_id === profile.id;
@@ -913,93 +1304,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                 ) : activeChatFriend ? (
                   <>
                     <div className="flex-grow overflow-y-auto p-6 no-scrollbar flex flex-col gap-4">
-                      {localStream && isCallRinging && (
-                        <div className="w-full border-2 border-[#333] p-4 bg-[#080808] relative">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
-                              <div>
-                                <span className="text-[10px] text-gray-400 uppercase tracking-widest">CALLING {activeChatFriend.nickname}</span>
-                                <p className="text-xs text-white mt-1">{callType === 'video' ? 'VIDEO CALL' : 'VOICE CALL'} · RINGING</p>
-                              </div>
-                            </div>
-                            <button onClick={stopLocalStream} className="text-red-500 hover:text-red-400 transition-colors">
-                              <CloseIcon />
-                            </button>
-                          </div>
-
-                          <div className="flex items-center justify-center gap-4 pb-4">
-                            <button
-                              type="button"
-                              onClick={stopLocalStream}
-                              className="px-5 py-3 rounded-full bg-red-500 border-2 border-red-500 text-white hover:bg-red-600 transition-colors text-[10px] uppercase tracking-[2px]"
-                            >
-                              Cancel Call
-                            </button>
-                            <button
-                              type="button"
-                              onClick={acceptCall}
-                              className="px-5 py-3 rounded-full bg-white border-2 border-white text-black hover:bg-gray-200 transition-colors text-[10px] uppercase tracking-[2px]"
-                            >
-                              Connect
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4 text-[10px] text-gray-400">
-                            <div className="p-3 border border-[#333] rounded">Microphone: {voiceSettings.echoCancellation ? 'On' : 'Off'}</div>
-                            <div className="p-3 border border-[#333] rounded">Noise Suppression: {voiceSettings.noiseSuppression ? 'On' : 'Off'}</div>
-                          </div>
-                        </div>
-                      )}
-
-                      {localStream && (isCallConnected || isVoiceCallActive || isVideoCallActive) && (
-                        <div className="w-full border-2 border-[#333] p-4 bg-[#080808] relative">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                              <span className="text-[10px] text-gray-400 uppercase tracking-widest">
-                                {(isVideoCallActive || callType === 'video') ? 'VIDEO CALL' : 'VOICE CALL'} WITH {activeChatFriend.nickname}
-                              </span>
-                            </div>
-                            <button onClick={stopLocalStream} className="text-red-500 hover:text-red-400 transition-colors">
-                              <CloseIcon />
-                            </button>
-                          </div>
-
-                          {isVideoCallActive && (
-                            <div className="relative mb-4">
-                              <video ref={videoRef} className="w-full h-48 bg-black rounded border border-[#333]" autoPlay muted playsInline />
-                              <div className="absolute bottom-2 right-2 w-20 h-20 border-2 border-white rounded">
-                                <video className="w-full h-full object-cover rounded" autoPlay muted playsInline />
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-center gap-4">
-                            <button
-                              onClick={() => setIsMuted(!isMuted)}
-                              className={`p-3 rounded-full border-2 transition-colors ${isMuted ? 'bg-red-500 border-red-500 text-white' : 'bg-[#1a1a1a] border-[#333] text-gray-400 hover:text-white'}`}
-                            >
-                              <MicIcon />
-                            </button>
-                            {isVideoCallActive && (
-                              <button
-                                onClick={() => setIsVideoMuted(!isVideoMuted)}
-                                className={`p-3 rounded-full border-2 transition-colors ${isVideoMuted ? 'bg-red-500 border-red-500 text-white' : 'bg-[#1a1a1a] border-[#333] text-gray-400 hover:text-white'}`}
-                              >
-                                <UserIcon />
-                              </button>
-                            )}
-                            <button
-                              onClick={stopLocalStream}
-                              className="p-3 rounded-full bg-red-500 border-2 border-red-500 text-white hover:bg-red-600 transition-colors"
-                            >
-                              <CloseIcon />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
                       {messages.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-600">
                           <p className="text-[10px] mb-2">COMMUNICATION LINK ESTABLISHED</p>
@@ -1324,13 +1628,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
                     <div className="border-2 border-[#1a1a1a] p-6 bg-[#111] mb-6">
                       <h3 className="text-lg mb-4">APPEARANCE</h3>
                       <div className="space-y-4">
-                        <button
-                          type="button"
-                          onClick={() => setAppearanceSettings(prev => ({ ...prev, theme: prev.theme === 'dark' ? 'light' : 'dark' }))}
-                          className="w-full text-left px-4 py-3 border-2 text-[10px] border-[#333] bg-[#050505] hover:border-white hover:text-white transition-colors"
-                        >
-                          Theme: {appearanceSettings.theme === 'dark' ? 'Dark' : 'Light'}
-                        </button>
+                        <div className="w-full text-left px-4 py-3 border-2 text-[10px] border-[#333] bg-[#050505] text-gray-400">
+                          Theme: Dark Mode (Permanent)
+                        </div>
                         <div>
                           <label className="text-[10px] text-gray-400 uppercase tracking-[3px] block mb-2">FONT SIZE</label>
                           <select
@@ -1360,6 +1660,29 @@ const Dashboard: React.FC<DashboardProps> = ({ session, theme }) => {
           )}
 
         </main>
+
+        {/* Discord-style Call Overlay */}
+        <CallOverlay
+          incomingCall={incomingCall}
+          localStream={localStream}
+          remoteStreamRef={remoteStreamRef}
+          remoteVideoRef={remoteVideoRef}
+          videoRef={videoRef}
+          isCallRinging={isCallRinging}
+          isCallConnected={isCallConnected}
+          isVoiceCallActive={isVoiceCallActive}
+          isVideoCallActive={isVideoCallActive}
+          callType={callType}
+          isMuted={isMuted}
+          isVideoMuted={isVideoMuted}
+          activeChatFriend={activeChatFriend}
+          profile={profile}
+          onAcceptCall={acceptCall}
+          onDeclineCall={declineCall}
+          onEndCall={stopLocalStream}
+          onToggleMute={toggleMute}
+          onToggleVideoMute={toggleVideoMute}
+        />
       </div>
     </div>
   );

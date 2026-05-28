@@ -5,7 +5,6 @@ import { supabase } from '../lib/supabaseClient';
 interface SignUpComponentProps {
   token: string | null;
   expires: string | null;
-  theme?: 'blue' | 'black';
   onNavigateHome: () => void;
   onSignUpSuccess: () => void;
   isSignedUp: boolean;
@@ -15,7 +14,7 @@ interface SignUpComponentProps {
 const SignUpComponent: React.FC<SignUpComponentProps> = ({
   token,
   expires,
-  theme = 'blue',
+
   onNavigateHome,
   onSignUpSuccess,
   isSignedUp,
@@ -154,7 +153,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
 
   if (isValid === null) {
     return (
-      <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen flex items-center justify-center`}>
+      <div className={`font-press-start bg-black text-white h-screen w-screen flex items-center justify-center`}>
         <p>VALIDATING INVITE...</p>
       </div>
     );
@@ -162,7 +161,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
 
   if (!isValid) {
     return (
-      <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen flex flex-col items-center justify-center p-4 text-center`}>
+      <div className={`font-press-start bg-black text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center`}>
         <h1 className="text-5xl mb-8">INVALID INVITE</h1>
         <p className="text-gray-400 mb-8">{isExpired ? 'This invite link has expired.' : 'This invite link is not valid.'}</p>
         <button onClick={onNavigateHome} className="text-[20px] text-black bg-white px-8 py-3 transition-all duration-150 ease-in-out shadow-[4px_4px_0px_#999] hover:translate-x-1 hover:translate-y-1 hover:shadow-none active:translate-x-1 active:translate-y-1 active:shadow-none">
@@ -174,7 +173,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
 
   if (isSignedUp) {
     return (
-      <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen flex flex-col items-center justify-center p-4 text-center`}>
+      <div className={`font-press-start bg-black text-white h-screen w-screen flex flex-col items-center justify-center p-4 text-center`}>
         <h1 className="text-5xl mb-8">SUCCESS!</h1>
         <p className="text-gray-400 mb-8">Account created. Please go back and log in with your new credentials.</p>
 
@@ -186,7 +185,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
   }
 
   return (
-    <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen overflow-y-auto flex flex-col items-center justify-center p-4`}>
+    <div className={`font-press-start bg-black text-white h-screen w-screen overflow-y-auto flex flex-col items-center justify-center p-4`}>
       <style>{`
         @keyframes signup-fade-in {
           from { opacity: 0; }
@@ -209,7 +208,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
+              className="w-full p-3 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
               placeholder="ENTER EMAIL..."
               required
             />
@@ -222,7 +221,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full p-3 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
+              className="w-full p-3 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
               placeholder="CHOOSE A USERNAME..."
               required
             />
@@ -236,7 +235,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
                 type={passwordVisible ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-3 pr-12 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
+                className="w-full p-3 pr-12 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
                 placeholder="CREATE A PASSWORD..."
                 required
               />
@@ -254,7 +253,7 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
                 type={confirmPasswordVisible ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full p-3 pr-12 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
+                className="w-full p-3 pr-12 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white caret-white placeholder-gray-500"
                 placeholder="CONFIRM YOUR PASSWORD..."
                 required
               />

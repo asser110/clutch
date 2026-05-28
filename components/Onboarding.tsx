@@ -5,12 +5,11 @@ import { supabase } from '../lib/supabaseClient';
 interface OnboardingProps {
   session: Session;
   onComplete: () => void;
-  theme: 'blue' | 'black';
 }
 
 const DEFAULT_AVATAR = 'https://api.dicebear.com/7.x/identicon/svg?seed=default&backgroundColor=000000';
 
-const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete, theme }) => {
+const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete }) => {
   const [step, setStep] = useState(1);
   const [nickname, setNickname] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -103,11 +102,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete, theme }) =
     }
   };
 
-  const bgColor = theme === 'blue' ? 'bg-slate-50' : 'bg-black';
-  const panelStyles = theme === 'blue' ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#050505] border-[#1a1a1a] text-white';
+  const bgColor = 'bg-black';
+  const panelStyles = 'bg-[#050505] border-[#1a1a1a] text-white';
 
   return (
-    <div className={`font-press-start ${bgColor} ${theme === 'blue' ? 'text-slate-900' : 'text-white'} h-screen w-screen overflow-hidden flex flex-col items-center justify-center p-4 relative`}>
+    <div className={`font-press-start ${bgColor} text-white h-screen w-screen overflow-hidden flex flex-col items-center justify-center p-4 relative`}>
       <style>{`
         @keyframes scanline {
           0% { transform: translateY(-100%); }

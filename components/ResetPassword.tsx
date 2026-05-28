@@ -4,10 +4,9 @@ import { supabase } from '../lib/supabaseClient';
 
 interface ResetPasswordProps {
     onBack: () => void;
-    theme?: 'blue' | 'black';
 }
 
-const ResetPassword: React.FC<ResetPasswordProps> = ({ onBack, theme = 'blue' }) => {
+const ResetPassword: React.FC<ResetPasswordProps> = ({ onBack }) => {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [passwordVisible, setPasswordVisible] = useState(false);
@@ -46,7 +45,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onBack, theme = 'blue' })
     };
 
     return (
-        <div className={`font-press-start ${theme === 'blue' ? 'bg-white text-black' : 'bg-black text-white'} h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4 transition-colors duration-500`}>
+        <div className="font-press-start bg-black text-white h-screen w-screen overflow-hidden relative flex flex-col items-center justify-center p-4">
             <style>{`
         @keyframes reset-fade-in {
           from { opacity: 0; }
@@ -78,7 +77,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onBack, theme = 'blue' })
                                     type={passwordVisible ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full p-3 pr-12 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white"
+                                    className="w-full p-3 pr-12 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white"
                                     placeholder="ENTER NEW PASSWORD..."
                                     required
                                 />
@@ -95,7 +94,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onBack, theme = 'blue' })
                                     type={confirmPasswordVisible ? 'text' : 'password'}
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="w-full p-3 pr-12 bg-gray-900 border-2 border-gray-600 text-white focus:outline-none focus:border-white"
+                                    className="w-full p-3 pr-12 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white"
                                     placeholder="CONFIRM NEW PASSWORD..."
                                     required
                                 />
