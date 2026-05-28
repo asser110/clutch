@@ -11,9 +11,10 @@ import {
   HeadphoneIcon,
   PlusIcon
 } from './icons';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabaseClient';
 import Onboarding from './Onboarding';
 import CallOverlay from './CallOverlay';
+import VoiceNotePlayer from './VoiceNotePlayer';
 
 interface DashboardProps {
   session: Session;
@@ -149,8 +150,43 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   useEffect(() => {
     if (profile) {
       fetchFriends();
-      // Set online status to true
-      supabase.from('profiles').update({ online_status: true }).eq('id', profile.id);
+      
+      // Heartbeat interval to keep online status alive
+      const setOnline = async () => {
+        try {
+          await supabase.from('profiles').update({ online_status: true }).eq('id', profile.id);
+        } catch (err) {
+          console.error('Failed to update online status:', err);
+        }
+      };
+      setOnline();
+      const heartbeat = setInterval(setOnline, 30000);
+      
+      // Set offline when tab is closed (uses cached token for RLS, sync XHR for reliability)
+      const handleBeforeUnload = () => {
+        const token = accessTokenRef.current;
+        if (token && supabaseUrl) {
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${supabaseUrl}/rest/v1/profiles?id=eq.${profile.id}`, false);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('apikey', supabaseAnonKey);
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.send(JSON.stringify({ online_status: false }));
+          } catch (e) {
+            // Silent fail — best-effort offline status
+          }
+        }
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      
+      // Set online again when tab becomes visible
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible') {
+          setOnline();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
       
       // Subscribe to profile changes for online status updates
       const profileSubscription = supabase
@@ -163,7 +199,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             table: 'profiles'
           },
           (payload) => {
-            // Update friends list when a friend's online status changes
             setFriends(prev => prev.map(friend => {
               const isSender = friend.user_id === profile.id;
               const friendId = isSender ? friend.friend_id : friend.user_id;
@@ -184,6 +219,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
       return () => {
         supabase.removeChannel(profileSubscription);
+        clearInterval(heartbeat);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        document.removeEventListener('visibilitychange', handleVisibility);
       };
     }
   }, [profile]);
@@ -245,6 +283,18 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       remoteVideoRef.current.play().catch(() => null);
     }
   });
+
+  // Cache access token for beforeunload (sync context — kept fresh via onAuthStateChange)
+  const accessTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      accessTokenRef.current = session?.access_token || null;
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      accessTokenRef.current = session?.access_token || null;
+    });
+    return () => subscription?.unsubscribe();
+  }, []);
 
   // Subscribe to incoming calls via Supabase
   useEffect(() => {
@@ -387,6 +437,19 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     await supabase.from('friends').update({ status: 'accepted' }).eq('id', friendRecordId);
     fetchFriends();
   };
+
+  const handleUnfriend = async (friendUserId: string) => {
+    if (!profile) return;
+    // Delete the friend record (either direction)
+    const { error } = await supabase
+      .from('friends')
+      .delete()
+      .or(`and(user_id.eq.${profile.id},friend_id.eq.${friendUserId}),and(user_id.eq.${friendUserId},friend_id.eq.${profile.id})`);
+    if (error) console.error('Failed to unfriend:', error);
+    fetchFriends();
+  };
+
+
 
   const handleUpdateSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -791,14 +854,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         return;
       }
       
-      // Create and send SDP offer
+      // Subscribe to signals first, then send the offer
       try {
+        signalsCleanupRef.current = setupSignalsSubscription(callData.id, pc, true, stream, type);
+        // Give the subscription a moment to activate, then send the offer
+        await new Promise(r => setTimeout(r, 300));
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         await sendSignal(callData.id, 'offer', pc.localDescription);
-        
-        // Subscribe to signals for answer and ICE candidates
-        signalsCleanupRef.current = setupSignalsSubscription(callData.id, pc, true, stream, type);
+        console.log('Call offer sent for call', callData.id);
       } catch (err) {
         console.error('Failed to create offer:', err);
         setMessageError('Failed to establish connection.');
@@ -993,10 +1057,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
           animation: messageIn 0.2s ease-out both;
         }
         input:focus, button:focus { outline: none; }
-        /* Better audio controls for dark theme */
-        audio::-webkit-media-controls-panel { background: #1a1a1a; }
-        audio::-webkit-media-controls-current-time-display { color: #999; }
-        audio::-webkit-media-controls-time-remaining-display { color: #999; }
       `}</style>
 
       <div className="scanline" />
@@ -1186,12 +1246,27 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                                 </span>
                               </div>
                             </div>
-                            <button 
-                              onClick={() => { setActiveChannel('dms'); setActiveChatFriend(friend); }}
-                              className="px-4 py-2 border-2 border-white text-white hover:bg-white hover:text-black transition-colors text-[10px]"
-                            >
-                              TRANSMIT
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => { setActiveChannel('dms'); setActiveChatFriend(friend); }}
+                                className="px-4 py-2 border-2 border-white text-white hover:bg-white hover:text-black transition-colors text-[10px]"
+                              >
+                                TRANSMIT
+                              </button>
+                              <div className="relative group/actions">
+                                <button className="px-2 py-2 border-2 border-[#333] text-gray-400 hover:border-white hover:text-white transition-colors text-[10px]">
+                                  ...
+                                </button>
+                                <div className="absolute right-0 top-full mt-1 bg-[#111] border-2 border-[#333] p-1 min-w-[120px] hidden group-hover/actions:flex flex-col z-50">
+                                  <button
+                                    onClick={() => handleUnfriend(friend.id)}
+                                    className="px-3 py-2 text-[9px] text-left text-red-400 hover:text-red-300 hover:bg-[#1a1a1a] transition-colors uppercase tracking-wider"
+                                  >
+                                    REMOVE
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1406,18 +1481,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                                 )}
                                 {/* Voice note player */}
                                 {isVoiceNote ? (
-                                  <div className={`max-w-[300px] ${isMine ? 'bg-white/5' : 'bg-[#111]'} border border-[#2a2a2a] rounded overflow-hidden`}>
-                                    <div className="flex items-center gap-2 px-3 py-2 bg-[#0a0a0a] border-b border-[#1a1a1a]">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400">
-                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                                        <line x1="12" y1="19" x2="12" y2="23"/>
-                                        <line x1="8" y1="23" x2="16" y2="23"/>
-                                      </svg>
-                                      <span className="text-[8px] text-gray-500 uppercase tracking-wider">VOICE MESSAGE</span>
-                                    </div>
-                                    <audio controls src={voiceUrl!} className="h-9 w-full block" style={{ accentColor: '#fff' }} />
-                                  </div>
+                                  <VoiceNotePlayer src={voiceUrl!} isMine={isMine} />
                                 ) : (
                                   <div className={`px-3 py-2 max-w-[80%] text-xs leading-relaxed ${isMine ? 'bg-white text-black' : 'border border-[#333] text-white'} group-hover:brightness-110 transition-all`}>
                                     {msg.content}
@@ -1461,7 +1525,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                             <circle cx="6" cy="18" r="3"/>
                             <circle cx="18" cy="16" r="3"/>
                           </svg>
-                          <audio controls src={recordedVoiceUrl} className="h-7 flex-grow max-w-[200px]" style={{ accentColor: '#22c55e' }} />
+                          <VoiceNotePlayer src={recordedVoiceUrl} isMine={true} />
                           <button
                             type="button"
                             onClick={sendVoiceNote}

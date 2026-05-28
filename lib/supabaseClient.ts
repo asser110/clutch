@@ -40,6 +40,7 @@ export const testConnection = async () => {
   }
 };
 
+export { supabaseUrl, supabaseAnonKey };
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 
