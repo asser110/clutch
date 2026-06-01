@@ -82,6 +82,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ session, onComplete }) => {
           {
             id: session.user.id,
             nickname: nickname.trim(),
+            username: nickname.trim(),
             avatar_url: finalAvatarUrl,
           }
         ]);

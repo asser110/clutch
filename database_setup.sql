@@ -8,8 +8,12 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 -- Add our required columns (these commands are safe if the columns already exist)
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS nickname TEXT UNIQUE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS online_status BOOLEAN DEFAULT false;
+
+UPDATE profiles SET username = nickname WHERE username IS NULL AND nickname IS NOT NULL;
+ALTER TABLE profiles ALTER COLUMN username SET NOT NULL;
 
 -- Enable real-time for profiles table
 ALTER TABLE profiles REPLICA IDENTITY FULL;
