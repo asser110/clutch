@@ -382,10 +382,6 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         }
       )
       .subscribe();
-          }
-        }
-      )
-      .subscribe();
 
     return () => {
       supabase.removeChannel(callsSub);
