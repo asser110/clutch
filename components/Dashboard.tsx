@@ -50,8 +50,10 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   const [callType, setCallType] = useState<'voice' | 'video' | null>(null);
   const [isCallRinging, setIsCallRinging] = useState(false);
   const [isCallConnected, setIsCallConnected] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState<{ [key: string]: number }>({});
   const audioContextRef = useRef<AudioContext | null>(null);
   const ringtoneOscRef = useRef<OscillatorNode | null>(null);
+  const callStatusListenerRef = useRef<(() => void) | null>(null);
 
   // Chat State
   const [activeChatFriend, setActiveChatFriend] = useState<any>(null);
@@ -354,7 +356,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             setIncomingCall(null);
             setCallType(null);
             stopRingtone();
-            stopLocalStream();
+            (async () => await stopLocalStream())();
           }
         }
       )
@@ -375,7 +377,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
             setIsCallRinging(false);
             setIncomingCall(null);
             stopRingtone();
-            stopLocalStream();
+            (async () => await stopLocalStream())();
+          }
+        }
+      )
+      .subscribe();
           }
         }
       )
@@ -531,11 +537,16 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     setActiveChatFriend(null);
   };
 
-  const stopLocalStream = () => {
+  const stopLocalStream = async () => {
     // Clean up signal subscription
     if (signalsCleanupRef.current) {
       signalsCleanupRef.current();
       signalsCleanupRef.current = null;
+    }
+    // Clean up call status listener
+    if (callStatusListenerRef.current) {
+      callStatusListenerRef.current();
+      callStatusListenerRef.current = null;
     }
     // Clean up peer connection
     if (peerConnectionRef.current) {
@@ -561,7 +572,11 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     stopRingtone();
     // Update call status in Supabase if there's an active call
     if (activeCallId && profile) {
-      supabase.from('calls').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', activeCallId);
+      try {
+        await supabase.from('calls').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', activeCallId);
+      } catch (err) {
+        console.error('Failed to update call status:', err);
+      }
     }
   };
 
@@ -651,13 +666,13 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
       pc.oniceconnectionstatechange = () => {
         if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-          stopLocalStream();
+          (async () => await stopLocalStream())();
         }
       };
 
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-          stopLocalStream();
+          (async () => await stopLocalStream())();
         }
       };
 
@@ -787,7 +802,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       setIsVideoCallActive(incomingCall.call_type === 'video');
     } catch (err: any) {
       console.error('Failed to accept call:', err);
-      stopLocalStream();
+      await stopLocalStream();
     }
   };
 
@@ -800,7 +815,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
     setCallType(null);
     setIncomingCall(null);
     stopRingtone();
-    stopLocalStream();
+    await stopLocalStream();
   };
 
   const initiateCall = async (type: 'voice' | 'video') => {
@@ -840,7 +855,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       if (callError || !callData) {
         console.error('Failed to create call:', callError);
         setMessageError('Failed to start call. Please try again.');
-        stopLocalStream();
+        await stopLocalStream();
         return;
       }
       
@@ -851,7 +866,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       // Create RTCPeerConnection (caller side)
       const pc = setupPeerConnection(callData.id, stream);
       if (!pc) {
-        stopLocalStream();
+        await stopLocalStream();
         return;
       }
       
@@ -867,7 +882,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       } catch (err) {
         console.error('Failed to create offer:', err);
         setMessageError('Failed to establish connection.');
-        stopLocalStream();
+        await stopLocalStream();
       }
     } catch (err: any) {
       setMessageError(`Failed to start ${type} chat. Allow camera / microphone access.`);
@@ -1087,6 +1102,15 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                   <span className="ml-3 tracking-widest">{channel.name}</span>
                 </button>
               ))}
+              <button 
+                onClick={() => setActiveChannel('settings')}
+                className={`flex items-center px-4 py-3 text-[11px] transition-all duration-150 border-2 border-transparent hover:border-[#333] ${
+                  activeChannel === 'settings' ? 'channel-active' : 'text-gray-400'
+                }`}
+              >
+                <CogIcon />
+                <span className="ml-3 tracking-widest">SETTINGS</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1189,7 +1213,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                 {friendTab === 'add' ? (
                   <>
                     <h3 className="text-lg mb-4">SEND FRIEND REQUEST</h3>
-                    <form onSubmit={handleAddFriend} className="flex gap-4 flex-wrap">
+                    <form onSubmit={handleAddFriend} className="flex gap-4 flex-wrap mb-6 pb-6 border-b border-[#1a1a1a]">
                       <input 
                         type="text" 
                         value={friendInput}
@@ -1201,8 +1225,42 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                         SEND REQUEST
                       </button>
                     </form>
-                    {friendError && <p className="text-red-500 text-[10px] mt-3">{friendError}</p>}
-                    {friendSuccess && <p className="text-green-500 text-[10px] mt-3">{friendSuccess}</p>}
+                    {friendError && <p className="text-red-500 text-[10px] mt-3 mb-3">{friendError}</p>}
+                    {friendSuccess && <p className="text-green-500 text-[10px] mt-3 mb-3">{friendSuccess}</p>}
+                    
+                    {pendingFriends.length > 0 && (
+                      <div className="mb-6">
+                        <h4 className="text-sm mb-3 uppercase tracking-widest text-gray-400">PENDING REQUESTS</h4>
+                        <p className="text-[10px] text-gray-600 mb-4">Sent and received friend requests</p>
+                        <div className="space-y-3">
+                          {pendingFriends.map(friend => {
+                            const isSender = friend.user_id === profile.id;
+                            const otherUser = isSender ? friend.receiver : friend.sender;
+                            return (
+                              <div key={friend.id} className="flex items-center justify-between border border-[#333] p-3 hover:border-[#555] transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 border border-[#333] p-0.5">
+                                    <img src={otherUser.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] block font-bold">{otherUser.nickname}</span>
+                                    <span className="text-[8px] text-yellow-500 uppercase">{isSender ? 'SENT' : 'INCOMING'}</span>
+                                  </div>
+                                </div>
+                                {!isSender && (
+                                  <button 
+                                    onClick={() => handleAcceptFriend(friend.id)}
+                                    className="px-3 py-1.5 text-[9px] bg-green-900 border border-green-500 text-green-400 hover:bg-green-500 hover:text-black transition-colors uppercase tracking-wider"
+                                  >
+                                    ACCEPT
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-[1fr_auto] items-center mb-6">
@@ -1250,9 +1308,14 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                             <div className="flex items-center gap-2">
                               <button 
                                 onClick={() => { setActiveChannel('dms'); setActiveChatFriend(friend); }}
-                                className="px-4 py-2 border-2 border-white text-white hover:bg-white hover:text-black transition-colors text-[10px]"
+                                className="px-4 py-2 border-2 border-white text-white hover:bg-white hover:text-black transition-colors text-[10px] relative"
                               >
-                                TRANSMIT
+                                CHAT
+                                {unreadMessages[friend.id] > 0 && (
+                                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[8px] px-2 py-0.5 rounded-full font-bold">
+                                    {unreadMessages[friend.id]}
+                                  </span>
+                                )}
                               </button>
                               <div className="relative group/actions">
                                 <button className="px-2 py-2 border-2 border-[#333] text-gray-400 hover:border-white hover:text-white transition-colors text-[10px]">
