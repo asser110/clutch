@@ -36,6 +36,10 @@ const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ src, isMine }) => {
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('ended', onEnded);
 
+    if (audio.readyState >= 1) {
+      onLoaded();
+    }
+
     return () => {
       audio.removeEventListener('loadedmetadata', onLoaded);
       audio.removeEventListener('timeupdate', onTimeUpdate);

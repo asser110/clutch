@@ -98,11 +98,11 @@ const SignUpComponent: React.FC<SignUpComponentProps> = ({
     setLoading(true);
     setErrors({});
 
-    // 1. Check if username is already taken in profiles table
+    // 1. Check if nickname is already taken in profiles table
     const { data: existingUser, error: checkError } = await supabase
       .from('profiles')
-      .select('username')
-      .eq('username', username.trim().toLowerCase())
+      .select('nickname')
+      .eq('nickname', username.trim().toLowerCase())
       .single();
 
     if (existingUser) {

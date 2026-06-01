@@ -15,6 +15,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabaseClient';
 import Onboarding from './Onboarding';
 import CallOverlay from './CallOverlay';
 import VoiceNotePlayer from './VoiceNotePlayer';
+import WebCLI from './WebCLI';
 
 interface DashboardProps {
   session: Session;
@@ -37,7 +38,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   const [nicknameInput, setNicknameInput] = useState('');
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'my-account' | 'voice-video' | 'notifications' | 'privacy' | 'appearance'>('my-account');
+  const [settingsTab, setSettingsTab] = useState<'my-account' | 'voice-video' | 'notifications' | 'privacy' | 'appearance' | 'terminal'>('my-account');
   const [audioSettings, setAudioSettings] = useState({ microphone: true, headphones: true, systemSounds: true, inputVolume: 100, outputVolume: 100, ringtone: true });
   const [messagingSettings, setMessagingSettings] = useState({ notifications: true, readReceipts: true, autoScroll: true, compactMode: false });
   const [privacySettings, setPrivacySettings] = useState({ showOnlineStatus: true, allowDMs: true, showActivity: false });
@@ -1631,6 +1632,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     { id: 'notifications', label: 'Notifications' },
                     { id: 'privacy', label: 'Privacy & Safety' },
                     { id: 'appearance', label: 'Appearance' },
+                    { id: 'terminal', label: 'CLI Terminal' },
                   ].map(item => (
                     <button
                       key={item.id}
@@ -1856,13 +1858,21 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                     </div>
                   )}
 
+                  {settingsTab === 'terminal' && (
+                    <div className="border-2 border-[#1a1a1a] bg-[#050505] p-2 min-h-[450px] flex flex-col mb-6">
+                      <WebCLI session={session} />
+                    </div>
+                  )}
+
                   {/* Danger Zone */}
-                  <div className="border-2 border-red-500 p-6 bg-[#111]">
-                    <h3 className="text-lg mb-4 text-red-500">DANGER ZONE</h3>
-                    <button onClick={handleLogout} className="px-6 py-4 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-black transition-colors text-xs">
-                      TERMINATE SESSION (LOG OUT)
-                    </button>
-                  </div>
+                  {settingsTab !== 'terminal' && (
+                    <div className="border-2 border-red-500 p-6 bg-[#111]">
+                      <h3 className="text-lg mb-4 text-red-500">DANGER ZONE</h3>
+                      <button onClick={handleLogout} className="px-6 py-4 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-black transition-colors text-xs">
+                        TERMINATE SESSION (LOG OUT)
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
