@@ -61,6 +61,9 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   const [groups, setGroups] = useState<any[]>([]);
   const [groupNameInput, setGroupNameInput] = useState('');
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
+  const [showGroupMemberSelector, setShowGroupMemberSelector] = useState(false);
+  const [groupSettings, setGroupSettings] = useState<{ [key: string]: { isMuted: boolean } }>({});
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [recentMessages, setRecentMessages] = useState<any>({});
@@ -83,6 +86,19 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
   const activeCallIdRef = useRef<string | null>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
+
+  // Discord-like Features
+  const [typingUsers, setTypingUsers] = useState<{ [key: string]: string[] }>({});
+  const [messageReactions, setMessageReactions] = useState<{ [key: string]: { [emoji: string]: string[] } }>({});
+  const [pinnedMessages, setPinnedMessages] = useState<any[]>([]);
+  const [readReceipts, setReadReceipts] = useState<{ [key: string]: string[] }>({});
+  const [userStatuses, setUserStatuses] = useState<{ [key: string]: 'online' | 'away' | 'offline' }>({});
+  const [showUserProfile, setShowUserProfile] = useState<any>(null);
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
+  const [showMemberList, setShowMemberList] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const activeGroupDetails = groups.find(group => group.id === activeGroup) || null;
 
@@ -484,53 +500,96 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !activeChatFriend) return;
-
+    if (!newMessage.trim()) return;
+    
     const msgContent = newMessage.trim();
     setNewMessage('');
     setSendingMessage(true);
     setMessageError(null);
 
     try {
-      const { data, error } = await supabase.from('messages').insert([
-        { sender_id: profile.id, receiver_id: activeChatFriend.id, content: msgContent }
-      ]).select();
+      if (activeGroup) {
+        // Send group message
+        const { data, error } = await supabase.from('group_messages').insert([
+          { group_id: activeGroup, sender_id: profile.id, content: msgContent }
+        ]).select();
 
-      if (error) {
-        setMessageError('Failed to send message. Please try again.');
-        setNewMessage(msgContent); // Restore message if sending fails
-        console.error('Message send error:', error);
-      } else if (data && data.length > 0) {
-        setMessages(prev => [...prev, data[0]]);
-        setRecentMessages(prev => ({
-          ...prev,
-          [activeChatFriend.id]: data[0]
-        }));
+        if (error) {
+          setMessageError('Failed to send message. Please try again.');
+          setNewMessage(msgContent);
+          console.error('Group message send error:', error);
+        } else if (data && data.length > 0) {
+          setMessages(prev => [...prev, data[0]]);
+        }
+      } else if (activeChatFriend) {
+        // Send DM
+        const { data, error } = await supabase.from('messages').insert([
+          { sender_id: profile.id, receiver_id: activeChatFriend.id, content: msgContent }
+        ]).select();
+
+        if (error) {
+          setMessageError('Failed to send message. Please try again.');
+          setNewMessage(msgContent);
+          console.error('Message send error:', error);
+        } else if (data && data.length > 0) {
+          setMessages(prev => [...prev, data[0]]);
+          setRecentMessages(prev => ({
+            ...prev,
+            [activeChatFriend.id]: data[0]
+          }));
+        }
       }
     } catch (err: any) {
       setMessageError('Error sending message. Check your connection.');
-      setNewMessage(msgContent); // Restore message if sending fails
+      setNewMessage(msgContent);
       console.error('Send message exception:', err);
     } finally {
       setSendingMessage(false);
     }
   };
 
-  const createGroup = (e: React.FormEvent) => {
+  const createGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!groupNameInput.trim()) return;
-    const newGroup = {
-      id: `${Date.now()}`,
-      name: groupNameInput.trim(),
-      members: [profile.id],
-      createdAt: new Date().toISOString()
-    };
-    setGroups(prev => [...prev, newGroup]);
-    setGroupNameInput('');
-    setIsCreatingGroup(false);
-    setActiveChannel('dms');
-    setActiveGroup(newGroup.id);
-    setActiveChatFriend(null);
+    if (!groupNameInput.trim() || selectedGroupMembers.length === 0) {
+      alert('Please enter a group name and select at least one member');
+      return;
+    }
+    
+    try {
+      const { data: newGroupData, error: groupError } = await supabase
+        .from('groups')
+        .insert([{ name: groupNameInput.trim(), creator_id: profile.id }])
+        .select()
+        .single();
+      
+      if (groupError) throw groupError;
+      
+      // Add creator as member
+      const memberIds = [profile.id, ...selectedGroupMembers];
+      const { error: membersError } = await supabase
+        .from('group_members')
+        .insert(memberIds.map(id => ({ group_id: newGroupData.id, user_id: id })));
+      
+      if (membersError) throw membersError;
+      
+      // Add to local state with full details
+      const newGroup = {
+        ...newGroupData,
+        members: memberIds,
+        memberDetails: acceptedFriends.filter(f => memberIds.includes(f.id))
+      };
+      
+      setGroups(prev => [...prev, newGroup]);
+      setGroupNameInput('');
+      setSelectedGroupMembers([]);
+      setShowGroupMemberSelector(false);
+      setIsCreatingGroup(false);
+      setActiveChannel('groups');
+      setActiveGroup(newGroup.id);
+    } catch (err) {
+      console.error('Error creating group:', err);
+      alert('Failed to create group');
+    }
   };
 
   const stopLocalStream = async () => {
@@ -632,6 +691,81 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       } catch (e) { /* already stopped */ }
       ringtoneOscRef.current = null;
     }
+  };
+
+  // ========== Discord-like Feature Functions ==========
+
+  const sendTypingIndicator = async (conversationId: string) => {
+    try {
+      await supabase.from('typing_indicators').insert([{
+        user_id: profile.id,
+        conversation_id: activeGroup ? undefined : conversationId,
+        group_id: activeGroup || undefined
+      }]);
+      // Auto-delete after 3 seconds
+      setTimeout(() => {
+        supabase.from('typing_indicators').delete().eq('user_id', profile.id);
+      }, 3000);
+    } catch (err) {
+      console.error('Error sending typing indicator:', err);
+    }
+  };
+
+  const toggleReaction = async (messageId: string, emoji: string) => {
+    try {
+      const existingReaction = messageReactions[messageId]?.[emoji]?.includes(profile.id);
+      if (existingReaction) {
+        // Remove reaction
+        setMessageReactions(prev => ({
+          ...prev,
+          [messageId]: {
+            ...prev[messageId],
+            [emoji]: prev[messageId][emoji].filter(id => id !== profile.id)
+          }
+        }));
+      } else {
+        // Add reaction
+        setMessageReactions(prev => ({
+          ...prev,
+          [messageId]: {
+            ...prev[messageId],
+            [emoji]: [...(prev[messageId]?.[emoji] || []), profile.id]
+          }
+        }));
+      }
+    } catch (err) {
+      console.error('Error toggling reaction:', err);
+    }
+  };
+
+  const pinMessage = async (messageId: string) => {
+    try {
+      const newPin = {
+        id: `${Date.now()}`,
+        message_id: messageId,
+        pinned_by: profile.id,
+        created_at: new Date().toISOString()
+      };
+      setPinnedMessages(prev => [...prev, newPin]);
+    } catch (err) {
+      console.error('Error pinning message:', err);
+    }
+  };
+
+  const unpinMessage = (messageId: string) => {
+    setPinnedMessages(prev => prev.filter(pin => pin.message_id !== messageId));
+  };
+
+  const deleteMessage = (messageId: string) => {
+    setMessages(prev => prev.filter(msg => msg.id !== messageId));
+  };
+
+  const blockUser = async (userId: string) => {
+    setBlockedUsers(prev => [...prev, userId]);
+  };
+
+  const unblockUser = (userId: string) => {
+    setBlockedUsers(prev => prev.filter(id => id !== userId));
   };
 
   // ========== WebRTC Helper Functions ==========
@@ -1473,11 +1607,77 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                 {activeGroupDetails ? (
                   <>
                     <div className="flex-grow overflow-y-auto p-6 no-scrollbar flex flex-col gap-4">
-                      <div className="h-full flex flex-col items-center justify-center text-gray-600">
-                        <p className="text-[10px] mb-2">GROUP CHANNEL READY</p>
-                        <p className="text-xs text-white">{activeGroupDetails.name} is assembled.</p>
-                        <p className="text-[10px] mt-4 text-gray-500">Use the group list to switch between squads in the DMs tab.</p>
-                      </div>
+                      {messages.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-600">
+                          <p className="text-[10px] mb-2">SQUAD CHANNEL INITIALIZED</p>
+                          <p className="text-xs text-white">#{activeGroupDetails.name}</p>
+                          <p className="text-[10px] mt-4 text-gray-500">Begin transmission with squad members.</p>
+                        </div>
+                      ) : (
+                        messages.map((msg, idx) => {
+                          const sender = activeGroupDetails.memberDetails?.find((m: any) => m.id === msg.sender_id);
+                          const isMine = msg.sender_id === profile.id;
+                          const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                          const isFirstInGroup = !prevMsg || prevMsg.sender_id !== msg.sender_id;
+                          const voiceMatch = msg.content?.match(voiceNoteRegex);
+                          const isVoiceNote = !!voiceMatch;
+                          const voiceUrl = voiceMatch ? voiceMatch[1] : null;
+                          const msgDate = new Date(msg.created_at);
+                          const prevDate = prevMsg ? new Date(prevMsg.created_at) : null;
+                          const showDateSeparator = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
+                          
+                          const formatDateSeparator = (date: Date) => {
+                            const now = new Date();
+                            const yesterday = new Date(now);
+                            yesterday.setDate(yesterday.getDate() - 1);
+                            if (date.toDateString() === now.toDateString()) return 'TODAY';
+                            if (date.toDateString() === yesterday.toDateString()) return 'YESTERDAY';
+                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+                          };
+                          
+                          return (
+                            <div key={idx} className="flex flex-col">
+                              {showDateSeparator && (
+                                <div className="flex items-center gap-3 my-4">
+                                  <div className="flex-grow h-px bg-[#1a1a1a]" />
+                                  <span className="text-[8px] text-gray-600 uppercase tracking-[3px] shrink-0">{formatDateSeparator(msgDate)}</span>
+                                  <div className="flex-grow h-px bg-[#1a1a1a]" />
+                                </div>
+                              )}
+                              <div className={`flex flex-col items-start group hover:bg-white/[0.02] px-2 py-1 rounded transition-colors ${idx === messages.length - 1 ? 'msg-enter' : ''}`}>
+                                {isFirstInGroup && (
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="w-5 h-5 border border-[#333] overflow-hidden shrink-0">
+                                      <img src={sender?.avatar_url || profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                                    </div>
+                                    <span className="text-[9px] text-gray-400 uppercase tracking-wider">
+                                      {isMine ? 'YOU' : sender?.nickname || sender?.username || 'Unknown'}
+                                    </span>
+                                    <span className="text-[7px] text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      {msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                )}
+                                {!isFirstInGroup && (
+                                  <span className="text-[7px] text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity mb-0.5 ml-8">
+                                    {msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                )}
+                                {isVoiceNote ? (
+                                  <div className="ml-7">
+                                    <VoiceNotePlayer src={voiceUrl!} isMine={isMine} />
+                                  </div>
+                                ) : (
+                                  <div className={`px-3 py-2 max-w-[80%] text-xs leading-relaxed ${isMine ? 'bg-white text-black' : 'border border-[#333] text-white'} group-hover:brightness-110 transition-all ml-7`}>
+                                    {msg.content}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                      <div ref={messagesEndRef} />
                     </div>
                   </>
                 ) : activeChatFriend ? (
@@ -1543,8 +1743,71 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                                 {isVoiceNote ? (
                                   <VoiceNotePlayer src={voiceUrl!} isMine={isMine} />
                                 ) : (
-                                  <div className={`px-3 py-2 max-w-[80%] text-xs leading-relaxed ${isMine ? 'bg-white text-black' : 'border border-[#333] text-white'} group-hover:brightness-110 transition-all`}>
+                                  <div className={`px-3 py-2 max-w-[80%] text-xs leading-relaxed ${pinnedMessages.some(p => p.message_id === msg.id) ? 'border-l-4 border-yellow-500 pl-2' : ''} ${isMine ? 'bg-white text-black' : 'border border-[#333] text-white'} group-hover:brightness-110 transition-all`}>
+                                    {pinnedMessages.some(p => p.message_id === msg.id) && (
+                                      <span className="text-[7px] text-yellow-500 block mb-1">📌 PINNED</span>
+                                    )}
                                     {msg.content}
+                                  </div>
+                                )}
+                                {/* Message Actions */}
+                                <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => toggleReaction(msg.id, '👍')}
+                                    className="px-2 py-0.5 text-[8px] bg-[#222] hover:bg-[#333] transition-colors rounded border border-[#444]"
+                                    title="React with 👍"
+                                  >
+                                    👍
+                                  </button>
+                                  <button
+                                    onClick={() => toggleReaction(msg.id, '❤️')}
+                                    className="px-2 py-0.5 text-[8px] bg-[#222] hover:bg-[#333] transition-colors rounded border border-[#444]"
+                                    title="React with ❤️"
+                                  >
+                                    ❤️
+                                  </button>
+                                  {isMine && (
+                                    <>
+                                      <button
+                                        onClick={() => deleteMessage(msg.id)}
+                                        className="px-2 py-0.5 text-[8px] bg-red-900/30 hover:bg-red-900/50 transition-colors rounded border border-red-700/30 text-red-400"
+                                        title="Delete message"
+                                      >
+                                        🗑️
+                                      </button>
+                                      <button
+                                        onClick={() => pinMessage(msg.id)}
+                                        className="px-2 py-0.5 text-[8px] bg-yellow-900/30 hover:bg-yellow-900/50 transition-colors rounded border border-yellow-700/30 text-yellow-400"
+                                        title="Pin message"
+                                      >
+                                        📌
+                                      </button>
+                                    </>
+                                  )}
+                                  <button
+                                    onClick={() => setShowUserProfile(isMine ? profile : activeChatFriend)}
+                                    className="px-2 py-0.5 text-[8px] bg-[#222] hover:bg-[#333] transition-colors rounded border border-[#444]"
+                                    title="View profile"
+                                  >
+                                    👤
+                                  </button>
+                                </div>
+                                {/* Reactions Display */}
+                                {messageReactions[msg.id] && Object.keys(messageReactions[msg.id]).length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-2 max-w-[80%]">
+                                    {Object.entries(messageReactions[msg.id]).map(([emoji, users]) => users.length > 0 && (
+                                      <button
+                                        key={emoji}
+                                        onClick={() => toggleReaction(msg.id, emoji)}
+                                        className={`px-2 py-0.5 text-[8px] rounded border transition-all ${
+                                          users.includes(profile.id)
+                                            ? 'bg-white/20 border-white text-white'
+                                            : 'bg-[#222] border-[#444] hover:border-[#666] text-gray-300'
+                                        }`}
+                                      >
+                                        {emoji} {users.length > 1 ? users.length : ''}
+                                      </button>
+                                    ))}
                                   </div>
                                 )}
                               </div>
@@ -1554,6 +1817,28 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                       )}
                       <div ref={messagesEndRef} />
                     </div>
+                    {/* Typing Indicators */}
+                    {typingUsers[activeGroup || activeChatFriend?.id]?.length > 0 && (
+                      <div className="px-6 py-2 text-[9px] text-gray-500 italic">
+                        {typingUsers[activeGroup || activeChatFriend?.id].join(', ')} is typing...
+                      </div>
+                    )}
+                    {/* Pinned Messages Preview */}
+                    {pinnedMessages.length > 0 && (
+                      <div className="px-6 py-3 bg-yellow-900/10 border-y border-yellow-700/30 max-h-24 overflow-y-auto">
+                        <div className="text-[8px] text-yellow-600 uppercase tracking-widest mb-2 font-bold">📌 PINNED MESSAGES ({pinnedMessages.length})</div>
+                        <div className="space-y-1">
+                          {pinnedMessages.slice(-3).map(pin => {
+                            const pinnedMsg = messages.find(m => m.id === pin.message_id);
+                            return pinnedMsg ? (
+                              <div key={pin.id} className="text-[8px] text-yellow-700 truncate p-1 bg-yellow-900/20 rounded">
+                                {pinnedMsg.content.substring(0, 50)}...
+                              </div>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    )}
                     <form onSubmit={handleSendMessage} className="p-3 border-t-2 border-[#1a1a1a]">
                       {messageError && (
                         <div className="text-red-500 text-[9px] p-2 mb-3 border-l-2 border-red-500 bg-red-500/5">
@@ -1624,7 +1909,12 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
                           <input 
                             type="text" 
                             value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
+                            onChange={(e) => {
+                              setNewMessage(e.target.value);
+                              if (e.target.value.trim()) {
+                                sendTypingIndicator(activeChatFriend?.id || activeGroup);
+                              }
+                            }}
                             placeholder="ENTER_MESSAGE..."
                             disabled={sendingMessage}
                             className="flex-grow bg-transparent text-white text-xs placeholder-gray-600 focus:outline-none disabled:opacity-50 py-1"
@@ -1653,29 +1943,155 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
 
           {activeChannel === 'groups' && (
             <div className="max-w-4xl w-full h-full flex flex-col relative z-10">
-              <div className="border-2 border-[#1a1a1a] p-6 bg-[#050505] relative mb-8">
-                <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
-                <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
-                
-                <h3 className="text-lg mb-4">INITIALIZE NEW SQUAD</h3>
-                <form className="flex gap-4" onSubmit={(e) => e.preventDefault()}>
-                  <input 
-                    type="text" 
-                    placeholder="ENTER_SQUAD_DESIGNATION..."
-                    className="flex-grow p-4 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs"
-                  />
-                  <button type="button" className="px-6 py-4 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors">
-                    CREATE SQUAD
-                  </button>
-                </form>
-              </div>
+              {!isCreatingGroup ? (
+                <>
+                  <div className="border-2 border-[#1a1a1a] p-6 bg-[#050505] relative mb-8">
+                    <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
+                    <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
+                    <button 
+                      onClick={() => setIsCreatingGroup(true)}
+                      className="px-8 py-3 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors font-bold tracking-[2px]"
+                    >
+                      + CREATE NEW SQUAD
+                    </button>
+                  </div>
 
-              <div className="flex-grow border-2 border-[#1a1a1a] p-6 bg-[#050505] relative flex flex-col">
-                <h3 className="text-lg mb-6 border-b-2 border-[#1a1a1a] pb-4">ACTIVE SQUADS</h3>
-                <div className="flex-grow flex items-center justify-center">
-                  <p className="text-[10px] text-gray-600">NO ACTIVE SQUADS FOUND. INITIALIZE ONE ABOVE.</p>
+                  <div className="flex-grow border-2 border-[#1a1a1a] p-6 bg-[#050505] relative flex flex-col overflow-y-auto">
+                    <h3 className="text-lg mb-6 border-b-2 border-[#1a1a1a] pb-4">ACTIVE SQUADS</h3>
+                    {groups && groups.length > 0 ? (
+                      <div className="space-y-4">
+                        {groups.map(group => (
+                          <div 
+                            key={group.id}
+                            onClick={() => {
+                              setActiveGroup(group.id);
+                              setActiveChatFriend(null);
+                            }}
+                            className={`p-4 border-2 transition-all cursor-pointer ${activeGroup === group.id ? 'border-white bg-[#111]' : 'border-[#333] bg-[#0a0a0a] hover:border-[#555]'}`}
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <h4 className="text-[11px] font-bold tracking-[1px]"># {group.name}</h4>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setGroupSettings(prev => ({
+                                    ...prev,
+                                    [group.id]: { ...prev[group.id], isMuted: !prev[group.id]?.isMuted }
+                                  }));
+                                }}
+                                className={`text-[8px] px-2 py-1 border border-[#333] rounded ${groupSettings[group.id]?.isMuted ? 'bg-white text-black' : 'bg-transparent text-white'}`}
+                              >
+                                {groupSettings[group.id]?.isMuted ? '🔇 MUTED' : '🔊 UNMUTED'}
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-gray-500 mb-2">
+                              {group.members?.length || 0} MEMBERS
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {group.memberDetails?.slice(0, 5).map(member => (
+                                <span key={member.id} className="text-[8px] bg-[#333] px-2 py-1 rounded">
+                                  {member.nickname || member.username}
+                                </span>
+                              ))}
+                              {group.memberDetails && group.memberDetails.length > 5 && (
+                                <span className="text-[8px] bg-[#333] px-2 py-1 rounded">+{group.memberDetails.length - 5}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-gray-600 flex items-center justify-center h-full">NO ACTIVE SQUADS FOUND. CREATE ONE ABOVE.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="flex-grow flex flex-col">
+                  <div className="border-2 border-[#1a1a1a] p-6 bg-[#050505] relative mb-8">
+                    <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
+                    <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
+                    
+                    <h3 className="text-lg mb-4">CREATE NEW SQUAD</h3>
+                    <form className="flex flex-col gap-4">
+                      <div>
+                        <label className="text-[10px] text-gray-400 uppercase tracking-[2px] mb-2 block">SQUAD NAME</label>
+                        <input 
+                          type="text" 
+                          value={groupNameInput}
+                          onChange={(e) => setGroupNameInput(e.target.value)}
+                          placeholder="Enter squad name..."
+                          className="w-full p-4 bg-[#111] border-2 border-[#333] text-white focus:outline-none focus:border-white text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 uppercase tracking-[2px] mb-3 block">SELECT MEMBERS</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowGroupMemberSelector(!showGroupMemberSelector)}
+                          className="w-full p-3 bg-[#111] border-2 border-[#333] text-white text-[10px] hover:border-white transition-colors text-left"
+                        >
+                          {selectedGroupMembers.length > 0 ? `${selectedGroupMembers.length} MEMBERS SELECTED` : 'CLICK TO SELECT MEMBERS'}
+                        </button>
+                        
+                        {showGroupMemberSelector && (
+                          <div className="mt-3 border-2 border-[#333] bg-[#0a0a0a] p-4 max-h-64 overflow-y-auto">
+                            {acceptedFriends.length > 0 ? (
+                              acceptedFriends.map(friend => (
+                                <label key={friend.id} className="flex items-center gap-3 p-2 hover:bg-[#111] cursor-pointer mb-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedGroupMembers.includes(friend.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedGroupMembers(prev => [...prev, friend.id]);
+                                      } else {
+                                        setSelectedGroupMembers(prev => prev.filter(id => id !== friend.id));
+                                      }
+                                    }}
+                                    className="w-4 h-4 cursor-pointer"
+                                  />
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    {friend.avatar_url && (
+                                      <img src={friend.avatar_url} alt={friend.nickname} className="w-6 h-6 rounded" />
+                                    )}
+                                    <span className="text-[9px] truncate">{friend.nickname || friend.username}</span>
+                                  </div>
+                                  {friend.online_status && <span className="text-[8px] text-green-500">●</span>}
+                                </label>
+                              ))
+                            ) : (
+                              <p className="text-[9px] text-gray-500">No friends to add. Add friends first!</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button
+                          type="submit"
+                          onClick={createGroup}
+                          disabled={!groupNameInput.trim() || selectedGroupMembers.length === 0}
+                          className="flex-1 px-6 py-3 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                        >
+                          CREATE SQUAD
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingGroup(false);
+                            setGroupNameInput('');
+                            setSelectedGroupMembers([]);
+                            setShowGroupMemberSelector(false);
+                          }}
+                          className="flex-1 px-6 py-3 bg-[#333] text-white text-[10px] hover:bg-[#555] transition-colors font-bold"
+                        >
+                          CANCEL
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -1940,7 +2356,76 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
         </main>
 
         {/* Discord-style Call Overlay */}
-        <CallOverlay
+        {/* User Profile Modal */}
+      {showUserProfile && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowUserProfile(null)}>
+          <div className="bg-[#050505] border-2 border-white p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-white" />
+            <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-white" />
+            
+            <div className="flex flex-col items-center mb-6">
+              <div className="w-24 h-24 border-2 border-white mb-4 overflow-hidden">
+                <img src={showUserProfile.avatar_url} alt={showUserProfile.nickname} className="w-full h-full object-cover" />
+              </div>
+              <h2 className="text-xl font-bold tracking-wider">{showUserProfile.nickname || showUserProfile.username}</h2>
+              <p className="text-[10px] text-gray-500 uppercase tracking-[2px] mt-1">@{showUserProfile.username}</p>
+              <div className={`mt-3 px-3 py-1 rounded text-[9px] uppercase tracking-widest font-bold ${
+                showUserProfile.online_status 
+                  ? 'bg-green-900/30 text-green-400 border border-green-500/50' 
+                  : 'bg-gray-900/30 text-gray-400 border border-gray-500/50'
+              }`}>
+                {showUserProfile.online_status ? '● ONLINE' : '● OFFLINE'}
+              </div>
+            </div>
+
+            <div className="space-y-2 mb-6 border-y border-[#333] py-4">
+              <p className="text-[9px] text-gray-500 uppercase tracking-[2px]">PROFILE INFO</p>
+              <p className="text-xs">Member since {new Date(showUserProfile.created_at || Date.now()).toLocaleDateString()}</p>
+            </div>
+
+            <div className="space-y-2 mb-6">
+              {showUserProfile.id !== profile.id && (
+                <>
+                  <button
+                    onClick={() => {
+                      setActiveChatFriend(showUserProfile);
+                      setActiveChannel('dms');
+                      setShowUserProfile(null);
+                    }}
+                    className="w-full px-4 py-2 bg-white text-black text-[10px] hover:bg-gray-200 transition-colors uppercase tracking-wider mb-2"
+                  >
+                    MESSAGE
+                  </button>
+                  {!blockedUsers.includes(showUserProfile.id) ? (
+                    <button
+                      onClick={() => blockUser(showUserProfile.id)}
+                      className="w-full px-4 py-2 bg-red-900/30 text-red-400 text-[10px] hover:bg-red-900/50 transition-colors uppercase tracking-wider border border-red-500/50"
+                    >
+                      BLOCK USER
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => unblockUser(showUserProfile.id)}
+                      className="w-full px-4 py-2 bg-green-900/30 text-green-400 text-[10px] hover:bg-green-900/50 transition-colors uppercase tracking-wider border border-green-500/50"
+                    >
+                      UNBLOCK USER
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowUserProfile(null)}
+              className="w-full px-4 py-2 bg-[#333] text-white text-[10px] hover:bg-[#444] transition-colors uppercase tracking-wider"
+            >
+              CLOSE
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Call Overlay */}
           incomingCall={incomingCall}
           localStream={localStream}
           remoteStreamRef={remoteStreamRef}
