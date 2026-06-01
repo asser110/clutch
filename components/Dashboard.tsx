@@ -2426,6 +2426,7 @@ const Dashboard: React.FC<DashboardProps> = ({ session }) => {
       )}
 
       {/* Call Overlay */}
+        <CallOverlay
           incomingCall={incomingCall}
           localStream={localStream}
           remoteStreamRef={remoteStreamRef}
